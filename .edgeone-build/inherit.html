@@ -1,0 +1,3910 @@
+﻿<!DOCTYPE html>
+<!--
+  这个文件是：潮州木雕·数智非遗传承 H5 网站 → 传承页 (inherit.html)
+  在干什么：用横向匠人卡片 + 固定金线标注 + 年轮互动弹窗，
+            传递"致敬所有长久坚持"的精神共鸣。
+  架构：MPA 多页面，底部固定导航栏，内嵌 CSS + Vanilla JS。
+  v2 更新：移除了视差长卷层，改为固定标注+金线；卡片改为错落焦点布局；按钮改为牙白实心底。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="认识潮州木雕传承人的技艺与故事，并通过年轮镌刻互动留下自己的坚持。">
+  <title>传承 · 潮州木雕</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* ============================================================
+     * 传承页专属样式（v2 重设计版）
+     * 这一段在干什么：
+     *   定义传承页的黑金双模式变量、匠人卡片错落布局、
+     *   固定金线标注、年轮弹窗、木屑粒子等所有模块的样式。
+     *   相比 v1：移除了视差层样式，新增了固定标注/金线样式，
+     *   重写了卡片焦点态和按钮样式。
+     * ============================================================ */
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+    /* 夜间模式：宽屏两侧黑边；日间模式：宽屏两侧宣纸色 */
+    body.dark { background: #000; }
+    body:not(.dark) { background: #f0e8d8; }
+
+    /* ===== 1. CSS 变量：日间 / 夜间两套配色 =====
+     * 人话讲：就像给页面准备了两套"颜料盒"，
+     *   默认（夜间）是深色木纹 + 鎏金文字，
+     *   切到日间就换成宣纸米白 + 深木色文字。
+     *   所有颜色都通过变量引用，切换时只改一个类名。
+     */
+    :root {
+      --inherit-bg: #1a1209;
+      --inherit-text: #c8a466;
+      --inherit-text-secondary: #a08050;
+      --inherit-card-bg: #2a1f14;
+      --inherit-card-border: #c8a466;
+      --inherit-btn-bg: rgba(200,164,102,0.15);
+      --inherit-btn-border: #c8a466;
+      --inherit-btn-text: #c8a466;
+      --inherit-scroll-bg: #3a2a1a;
+    }
+
+    /* 日间模式变量：当 .inherit-page 没有 .dark 类时生效 */
+    .inherit-page:not(.dark) {
+      --inherit-bg: #f8f5ed;
+      --inherit-text: #4a3829;
+      --inherit-text-secondary: #8a7b6e;
+      --inherit-card-bg: #ede5d5;
+      --inherit-card-border: #c8a466;
+      --inherit-btn-bg: rgba(74,56,41,0.1);
+      --inherit-btn-border: #4a3829;
+      --inherit-btn-text: #4a3829;
+      --inherit-scroll-bg: #e0d8c8;
+    }
+
+    /* ===== 2. 页面根容器 =====
+     * 在干什么：铺满整屏，铺合成背景图（长卷+纹理合成），设好底部导航留白。
+     * 数据从哪来：背景图 inherit_composite_bg_clean_from_screenshot.jpg 是整页底层，
+     *   center top / cover no-repeat fixed 表示居中顶部对齐、覆盖整屏、不平铺、相对视口固定。
+     *
+     * 新手易错点：
+     *   - background 简写里 fixed 表示背景相对视口固定，不随页面滚动。
+     *   - 如果图片路径错了（404），页面会显示兜底色 #1a1209，不会白屏。
+     *   - cover 会等比缩放图片填满容器，可能裁切边缘，但不会变形。
+     *   验证：F12 Network 面板应看到 inherit_composite_bg_clean_from_screenshot.jpg 返回 200 OK；
+     *         滚动页面时背景图不动。
+     */
+    .inherit-page {
+      min-height: 100vh;
+      /* 9:16竖屏比例锁定：宽度 = 视口高度 × 9/16，保证手机竖屏沉浸体验 */
+      max-width: calc(100vh * 9 / 16);
+      margin: 0 auto;
+      width: 100%;
+      box-sizing: border-box;
+      /* 夜间模式：合成背景图（长卷+纹理），fixed 不随内容滚动 */
+      background: url('assets/images/inherit/inherit_composite_bg_clean_from_screenshot.jpg') center top / cover no-repeat fixed;
+      background-color: var(--inherit-bg); /* 兜底色，图片加载前显示 */
+      position: relative;
+      overflow-x: hidden;
+      /* 底部留出导航栏高度 + 刘海安全区 */
+      padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+      /* 颜色切换 0.4s 平滑过渡 */
+      transition: color 0.4s ease;
+    }
+
+    /* ===== 2.1 日间模式遮罩 =====
+     * 在干什么：日间模式时，在根容器上叠一层宣纸米白半透明遮罩，
+     *   让合成背景图（含长卷）隐约可见，但整体色调变浅为米白。
+     *   用 ::after 伪元素实现，不增加额外 DOM 节点。
+     *
+     * 新手易错点：
+     *   - position:fixed 让遮罩相对视口固定，不随内容滚动。
+     *   - pointer-events:none 确保遮罩不拦截下层的点击/滑动事件。
+     *   - z-index:0 让遮罩在最底层，内容区 z-index≥1 的元素自然浮在上面。
+     *   - opacity 从 0.88 改为 0.85，让长卷背景多透出来一点，可见性更好。
+     *   验证：切到日间模式，背景中的长卷纹理应隐约可见，不是一片纯白。
+     */
+    .inherit-page::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: #f8f5ed;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    /* 日间模式（没有 .dark 类）：遮罩 opacity 改为 0.85（保留长卷可见性） */
+    .inherit-page:not(.dark)::after {
+      opacity: 0.85;
+    }
+
+    /* ===== 3. 固定顶部控件 =====
+     * 在干什么：右上角月亮 + 音符两个圆形按钮，固定不随页面滚动。
+     * 样式完全复制 history.html 的 .history-header__btn 风格。
+     * z-index 最高（900），确保永远浮在最上层。
+     */
+    .inherit-top-controls {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 900;
+      display: flex;
+      gap: 10px;
+    }
+
+    .inherit-top-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid rgba(200,164,102,0.4);
+      background: rgba(42,31,20,0.6);
+      color: var(--inherit-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 日间模式按钮底色调整 */
+    .inherit-page:not(.dark) .inherit-top-btn {
+      background: rgba(255,255,255,0.6);
+      border-color: rgba(200,164,102,0.3);
+      color: #4a3829;
+    }
+
+    .inherit-top-btn:active {
+      transform: scale(0.92);
+    }
+
+    .inherit-top-btn svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* ===== 4. 页面顶部标题区 =====
+     * 在干什么：左上角渲染"传承"主标题 + 副标题，CSS 文字渲染。
+     *   鎏金色 serif 字体，不合并到背景图。
+     *   padding 改为 56px 20px 16px（顶部缩小，更紧凑）。
+     *
+     * 新手易错点：
+     *   - text-shadow 用多层投影模拟发光效果，让文字在复杂背景上更清晰可读。
+     *   - z-index:10 确保标题在遮罩层（z-index:0）之上。
+     *   验证：标题文字有柔和的黑色投影，在任何背景下都清晰不糊。
+     */
+    .inherit-title-area {
+      padding: 24px 20px 4px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .inherit-title {
+      font-family: serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      letter-spacing: 0.1em;
+      margin: 0;
+      transition: color 0.4s ease;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+
+    .inherit-subtitle {
+      font-family: serif;
+      font-size: 14px;
+      color: var(--inherit-text);
+      letter-spacing: 0.2em;
+      margin: 4px 0 0;
+      opacity: 0.8;
+      transition: color 0.4s ease;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+
+    /* 页头资料来源注释小字
+       在干什么：在副标题下方加一行很小的灰色注释文字，说明资料来源，
+       字号比副标题更小，透明度更低，不抢标题视觉焦点 */
+    .inherit-note {
+      font-family: serif;
+      font-size: 10px;
+      color: var(--inherit-text);
+      letter-spacing: 0.05em;
+      margin: 6px 0 0;
+      opacity: 0.5;
+      transition: color 0.4s ease;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+      line-height: 1.4;
+    }
+
+    /* ===== 5. 横向滚动匠人卡片容器 =====
+     * 在干什么：4 张匠人卡片横向排列，支持手指左右滑动。
+     *   关键三件套：overflow-x:auto + scroll-snap + -webkit-overflow-scrolling:touch
+     *   v2 更新：卡片宽度缩小到 130px，gap 改为 10px，padding 改为左右对称
+     *   让边缘卡片可以滚动到正中间；margin-top:22vh 把卡片推到页面中下部叠在长卷背景上。
+     *
+     * 新手易错点：
+     *   - 必须同时给 scroll-snap-type 和每张卡片的 scroll-snap-align，否则不会"吸附"。
+     *   - padding: 10px calc(50vw - 65px) 的意思是：上下 10px，左右各留"视口一半宽度减去卡片一半宽度(65px)"，
+     *     这样最左边和最右边的卡片也能被滚动到视口正中央。
+     *   - 手势区分：横向滑卡片时不能阻止竖向滚动页面。
+     *   验证方法：手机上左右滑卡片 → 再上下滚页面，两个方向互不干扰；
+     *             第一张和最后一张卡片都能居中显示；卡片位于屏幕中部偏下。
+     */
+    .inherit-cards-section {
+      position: relative;
+      z-index: 10;
+      padding: 6px 0 8px;
+      margin-top: 3vh;
+    }
+
+    .inherit-cards-scroll {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      padding: 5px calc(50% - 58px);
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      overscroll-behavior-x: contain;
+      touch-action: pan-x;
+    }
+
+    /* 手势方向判定为纵向时，临时禁止横向滚动，避免竖滑页面时卡片误动 */
+    .inherit-cards-scroll--lock-x {
+      overflow-x: hidden !important;
+      scroll-snap-type: none !important;
+    }
+
+    /* 无限循环跳转瞬间禁用snap，防止snap把跳转位置吸附回去 */
+
+    .inherit-cards-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* ===== 5.1 单张匠人卡片（默认非焦点态） =====
+     * 在干什么：非居中卡片缩小到 0.94 倍并微微上移，形成错落效果。
+     *   v2 更新：宽度从 160px 改为 130px；非 featured 卡片默认 transform 缩小上移。
+     *
+     * 新手易错点：
+     *   - flex: 0 0 130px 意思是不伸缩、基础宽度 130px，所有卡片等宽。
+     *   - scroll-snap-align: center 让卡片吸附到容器中心，配合容器 padding 实现居中。
+     *   - transition 同时监听 transform 和 box-shadow，让焦点切换动画平滑。
+     *   验证：页面加载后，非中间的卡片应比中间卡片小一圈，位置略微靠上。
+     */
+    /* 初始化期间禁用心跳动画，避免首帧布局抖动
+     * 人话讲：页面刚加载时，我们先让卡片"跳"到正确的焦点状态（无过渡），
+     *   等布局稳定后再启用过渡动画。如果一上来就开着过渡，
+     *   浏览器在处理 scroll-snap 滚动时可能让动画"卡住"不动。 */
+    .inherit-cards-scroll.inherit-cards-scroll--init .inherit-card {
+      transition: none !important;
+    }
+
+    .inherit-card {
+      flex: 0 0 116px;
+      scroll-snap-align: center;
+      border: 2px solid var(--inherit-card-border);
+      border-radius: 12px;
+      background: var(--inherit-card-bg);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.35s ease, filter 0.4s ease;
+      position: relative;
+      transform: translateY(-2px) scale(0.95);
+      filter: brightness(0.88);
+    }
+
+    .inherit-card:active:not(.inherit-card--featured) {
+      transform: scale(0.92) translateY(-1px);
+    }
+
+    /* ===== 5.2 焦点卡片（居中那张）=====
+     * 在干什么：当前滚动到视口中央的卡片会加上 .inherit-card--featured 类，
+     *   放大 1.12 倍、下移 18px、加明亮阴影、亮度拉满，形成"凸出来"的焦点效果。
+     *   非焦点卡片缩小到 0.86 倍、上移 12px、压暗到 0.75 亮度。
+     *   大小差 0.26 倍（26%）、高度差 30px，形成明显的菱形/V形错落。
+     *
+     * 新手易错点：
+     *   - z-index:3 必须比非焦点卡片高，否则放大后的卡片会被旁边卡片遮挡。
+     *   - translateY(18px) 让焦点卡片比非焦点卡片低 30px（18 - (-12) = 30px 差距）。
+     *   - filter:brightness(1) 恢复正常亮度，非焦点卡片 brightness(0.75) 压暗，
+     *     通过明暗对比进一步突出焦点卡片。
+     *   - box-shadow 用多层阴影制造悬浮立体感。
+     *   验证：居中卡片明显比旁边卡片大、亮、低；旁边卡片小、暗、高；形成菱形布局。
+     */
+    .inherit-card--featured {
+      transform: scale(1.03) translateY(2px) !important;
+      z-index: 3;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 15px rgba(200,164,102,0.2), inset 0 0 0 1px rgba(200,164,102,0.3) !important;
+      filter: brightness(1) !important;
+      border-color: #d4b072;
+    }
+
+    /* 焦点卡片按下态：保持大尺寸但略微缩小，模拟按压
+     * 注意：此规则必须在 .inherit-card--featured 之后，确保 !important 优先级正确 */
+    .inherit-card--featured:active {
+      transform: scale(1.02) translateY(8px) !important;
+    }
+
+    /* ===== 5.3 卡片图片区域 =====
+     * 在干什么：4:5 比例，object-fit:cover 居中裁切。
+     *   v2 新增：::after 伪元素加内阴影暗角，让图片四周自然暗下去，
+     *   突出中心人物，视觉上更有聚光感。
+     *
+     * 新手易错点：
+     *   - ::after 伪元素必须设 content:'' 才会显示，哪怕不需要内容。
+     *   - inset:0 等于 top:0;right:0;bottom:0;left:0，铺满父容器。
+     *   - pointer-events:none 让暗角层不拦截图片上的点击事件。
+     *   - box-shadow: inset ... 内阴影，从边缘向内投射，制造暗角。
+     *   验证：卡片图片的四个角和边缘应比中心略暗，像老照片的暗角效果。
+     */
+    .inherit-card__img-wrap {
+      aspect-ratio: 4 / 5;
+      overflow: hidden;
+      position: relative;
+      background: var(--inherit-scroll-bg);
+    }
+
+    .inherit-card__img-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.4);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .inherit-card__img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+      display: block;
+      transition: opacity 0.3s ease;
+    }
+
+    /* 图片加载失败的占位：显示匠人姓氏首字 */
+    .inherit-card__placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: serif;
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      background: var(--inherit-scroll-bg);
+    }
+
+    /* ===== 5.3b 卡片右下角印章（长按触发小故事彩蛋）=====
+     * 在干什么：每张卡片右下角盖一枚朱砂红小印章，印匠人姓氏。
+     *   既是国风装饰，也是长按交互的视觉提示——长按印章弹出冷门小故事。
+     *
+     * 人话讲：就像真实字画作品角落的作者印章，红色小方块盖在照片右下角，
+     *   上面写匠人姓氏。长按它=解锁彩蛋。
+     *
+     * 新手易错点：
+     *   - 印章元素设 56px（非焦点卡片 scale(0.86) 后有效触控区约 48px，满足要求）。
+     *   - 内部红色方块 30px，缩放后视觉约 26px，比例协调。
+     *   - 不能用 ::after 扩展热区，因为父级 img-wrap 有 overflow:hidden 会裁掉溢出部分。
+     *   - z-index:3 确保印章浮在暗角层和信息区之上。
+     *   验证：每张卡片右下角有红色小方章，印章内有白色姓氏字，手指长按 1.5 秒弹出小故事气泡。
+     */
+    .inherit-card__seal {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3;
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8f5ed;
+      line-height: 1;
+    }
+
+    /* 印章内部红色方块（视觉层 30px，居中在 56px 触控区内）*/
+    .inherit-card__seal::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 30px;
+      height: 30px;
+      background: #9c2424;
+      border-radius: 3px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.1);
+      transform: translate(-50%, -50%);
+      z-index: -1;
+    }
+
+    /* 焦点卡片上的印章红色方块：稍微放大匹配焦点卡片的放大态 */
+    .inherit-card--featured .inherit-card__seal::before {
+      transform: translate(-50%, -50%) scale(1.05);
+    }
+
+    /* ===== 5.4 卡片底部信息区 =====
+     * 在干什么：显示匠人的名字和标签，v2 改为深色渐变背景，
+     *   让底部信息和图片区更有层次感，不"飘"。
+     *   夜间模式：深棕色渐变（从半透明到几乎不透明）。
+     *
+     * 新手易错点：
+     *   - position:relative; z-index:1 确保信息区浮在暗角层（img-wrap::after 的 z-index:1）之上，
+     *     不被暗角遮到文字。
+     *   - 渐变用 linear-gradient 从透明到实色，模拟"沉下去"的感觉。
+     *   验证：卡片底部名字区域应是深色渐变底，文字清晰可读；
+     *         切换日间模式后变为浅色渐变底。
+     */
+    .inherit-card__info {
+      padding: 10px 12px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(42,31,20,0.6), rgba(42,31,20,0.95));
+      position: relative;
+      z-index: 2;
+    }
+
+    /* 日间模式卡片底部 info：浅色渐变底适配 */
+    .inherit-page:not(.dark) .inherit-card__info {
+      background: linear-gradient(180deg, rgba(237,229,213,0.7), rgba(237,229,213,0.95));
+    }
+
+    .inherit-card__name {
+      font-family: serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      margin: 0 0 6px;
+      transition: color 0.4s ease;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+
+    /* 日间模式卡片名字：淡阴影适配浅色背景 */
+    .inherit-page:not(.dark) .inherit-card__name {
+      text-shadow: 1px 1px 2px rgba(255,255,255,0.5);
+    }
+
+    /* 身份标签：圆角小标签 */
+    /* 卡片标签（两行："潮州木雕"在上，"传承人"在下）
+       在干什么：圆角胶囊标签改成两行结构，文字居中，
+       display:block让它独占一行，text-align:center让两行居中对齐，
+       适当增大padding让两行有呼吸感，line-height控制行间距。 */
+    .inherit-card__tag {
+      display: block;
+      font-size: 10px;
+      padding: 4px 6px;
+      border-radius: 8px;
+      background: rgba(200,164,102,0.2);
+      color: var(--inherit-text);
+      letter-spacing: 0.5px;
+      text-align: center;
+      line-height: 1.4;
+      transition: background 0.4s ease, color 0.4s ease;
+      margin-top: 4px;
+    }
+
+    /* 标签内两行文字样式 */
+    .inherit-card__tag-line {
+      display: block;
+    }
+
+    /* 国家级传承人标签用朱砂红底 */
+    .inherit-card__tag--national {
+      background: rgba(156,36,36,0.8);
+      color: #f5efe0;
+    }
+
+    /* 省级传承人标签用鎏金底（深金色，区别于国家级朱砂红）*/
+    .inherit-card__tag--provincial {
+      background: rgba(200,164,102,0.7);
+      color: #1a1209;
+    }
+
+    /* 民间匠人/清末奠基标签用灰褐底 */
+    .inherit-card__tag--folk {
+      background: rgba(138,123,110,0.5);
+      color: #f5efe0;
+    }
+
+    /* 新生代传承人标签用青绿底（象征新生）*/
+    .inherit-card__tag--new {
+      background: rgba(80,120,100,0.5);
+      color: #f5efe0;
+    }
+
+    /* 日间模式标签样式：提高背景不透明度，文字改深色，保证可读性 */
+    .inherit-page:not(.dark) .inherit-card__tag {
+      background: rgba(200,164,102,0.35);
+      color: #4a3829;
+    }
+
+    /* 卡片柔光动画（年轮弹窗关闭后联动触发） */
+    @keyframes cardGlow {
+      0%   { box-shadow: 0 0 0 rgba(200,164,102,0); filter: brightness(1); }
+      50%  { box-shadow: 0 0 20px rgba(200,164,102,0.6); filter: brightness(1.2); }
+      100% { box-shadow: 0 0 0 rgba(200,164,102,0); filter: brightness(1); }
+    }
+
+    .inherit-card--glow {
+      animation: cardGlow 2s ease forwards;
+    }
+
+    /* ===== 6. 时间轴容器（金线 + 初学/经年/承艺，正常文档流布局）=====
+     * 在干什么：放在卡片区和过渡文字之间，用 flex 纵向排列，
+     *   居中显示三个阶段文字 + 短金线分隔，不再使用 vh 绝对定位，彻底消除重叠问题。
+     *   z-index 低于卡片和文字内容，不会遮挡其他元素。
+     *
+     * 人话讲：原来的标注层用 position:absolute + vh 固定定位，
+     *   在不同屏幕尺寸上容易和过渡文字重叠。现在改成正常流式布局，
+     *   跟着内容自然排列，"初学→金线→经年→金线→承艺"纵向居中排列。
+     */
+    .inherit-overlay {
+      display: none;
+    }
+
+    .inherit-timeline {
+      position: relative;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 20px 4px;
+      margin-top: 4px;
+      pointer-events: none;
+    }
+
+    /* ===== 6.1 金色短线段 =====
+     * 在干什么：标签之间的垂直金线，两端渐隐，短线而非跨屏长线。
+     *   用 flex 布局自然排列在标签之间，不需要绝对定位。
+     */
+    .inherit-gold-line {
+      width: 1px;
+      height: 24px;
+      background: linear-gradient(180deg, transparent, #c8a466 30%, #c8a466 70%, transparent);
+      margin: 2px 0;
+      opacity: 0.6;
+    }
+
+    .inherit-label {
+      font-family: serif;
+      font-size: 16px;
+      color: #c8a466;
+      letter-spacing: 0.15em;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      margin: 0;
+      opacity: 0.85;
+      line-height: 1.4;
+    }
+
+    /* 日间模式标签：深木色 + 极淡阴影保证可读 */
+    .inherit-page:not(.dark) .inherit-label {
+      color: #4a3829;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .inherit-page:not(.dark) .inherit-gold-line {
+      background: linear-gradient(180deg, transparent, #8a7b6e 30%, #8a7b6e 70%, transparent);
+      opacity: 0.5;
+    }
+
+    /* ===== 7. 木屑粒子特效 =====
+     * 在干什么：CSS animation 驱动小木屑飘落，上限 30 个，opacity ≤ 0.2。
+     * pointer-events:none 确保不遮挡文字与交互。
+     *
+     * 新手易错点：
+     *   - 粒子容器必须 pointer-events:none，否则会拦截下层点击事件。
+     *   - z-index 要适中（在长卷之上、控件之下）。
+     *   验证方法：滚动页面时看到淡淡木屑飘落，但点击按钮不受影响。
+     */
+    .inherit-particles {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+      overflow: hidden;
+    }
+
+    .inherit-particle {
+      position: absolute;
+      width: 3px;
+      height: 5px;
+      border-radius: 1px;
+      background: rgba(180, 140, 90, 0.5);
+      opacity: 0;
+      animation: inheritParticleFall 5s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes inheritParticleFall {
+      0% {
+        opacity: 0;
+        transform: translateY(-10px) translateX(0) rotate(0deg);
+      }
+      15% {
+        opacity: 0.18;
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(120px) translateX(var(--drift, 15px)) rotate(360deg);
+      }
+    }
+
+    /* ===== 8. 木纹长卷底部过渡导语 =====
+     * 在干什么：时间轴之后的过渡文字，浅宣纸白 + 柔和木色阴影保证可读，
+     *   关键词"初学""经年""承艺"用鎏金色高亮，不加廉价重发光。
+     */
+    .inherit-transition-text {
+      position: relative;
+      z-index: 10;
+      margin-top: 12px;
+      padding: 8px 24px 8px;
+      text-align: center;
+      font-family: serif;
+      font-size: 17px;
+      line-height: 2.0;
+      color: #f8f5ed;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.4);
+      transition: color 0.4s ease;
+    }
+
+    /* 过渡导语半透明渐变暗背景：两端渐隐，增强文字可读性 */
+    .inherit-transition-text::before {
+      content: '';
+      position: absolute;
+      inset: -8px -16px;
+      background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.18) 10%, rgba(0,0,0,0.18) 90%, transparent 100%);
+      border-radius: 8px;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* 日间模式过渡文字：深木色，浅白渐变背景 */
+    .inherit-page:not(.dark) .inherit-transition-text {
+      color: #4a3829;
+      text-shadow: none;
+    }
+
+    /* 日间模式过渡导语：浅白渐变背景，适配浅色主题 */
+    .inherit-page:not(.dark) .inherit-transition-text::before {
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3) 10%, rgba(255,255,255,0.3) 90%, transparent);
+    }
+
+    /* 关键词高亮：鎏金色 + 略粗 */
+    .inherit-text-highlight {
+      color: #c8a466;
+      font-weight: 600;
+    }
+
+    .inherit-page:not(.dark) .inherit-text-highlight {
+      color: #9a6b2f;
+      font-weight: 700;
+    }
+
+    /* ===== 9. 底部并排双圆角按钮（v2 重设计：牙白实心底）=====
+     * 在干什么：v2 重大更新：按钮从原来的半透明描边按钮改为牙白/米色实心底按钮，
+     *   更有质感、更像真实的木质/象牙按钮。
+     *   padding-top 从 10px 改为 16px（配合过渡文字上移）。
+     *
+     * 新手易错点：
+     *   - 渐变用 linear-gradient(180deg, #f5e6c8, #e8d4a8) 从上到下浅米→深米，
+     *     模拟凸起按钮的光影（上方亮、下方暗）。
+     *   - box-shadow 分两层：外层投影(0 3px 10px rgba(0,0,0,0.25))制造悬浮感，
+     *     内阴影(inset 0 1px 0 rgba(255,255,255,0.4))模拟顶部高光，增加立体感。
+     *   - border:1px solid #c8a466 鎏金细边框，和整体风格统一。
+     *   - font-weight:600 半粗体，在实色底上更清晰。
+     *   验证：按钮看起来像米白色的实体按钮，有立体光影感；点击时有按压反馈。
+     */
+    .inherit-actions {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      gap: 12px;
+      padding: 4px 20px 12px;
+      justify-content: center;
+    }
+
+    .inherit-action-btn {
+      flex: 1;
+      max-width: 180px;
+      min-height: 48px;
+      padding: 14px 20px;
+      border-radius: 30px / 26px;
+      background: linear-gradient(180deg, #f7edd6 0%, #ead6ab 50%, #ddc493 100%);
+      border: 1.5px solid #c8a466;
+      color: #4a3829;
+      font-family: serif;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, filter 0.2s ease;
+      letter-spacing: 0.08em;
+      box-shadow:
+        0 4px 12px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.6),
+        inset 0 -1px 0 rgba(100,70,30,0.15);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 按钮悬停态：微亮 */
+    .inherit-action-btn:hover {
+      filter: brightness(1.05);
+    }
+
+    /* 按钮按下态：微暗 + 轻微缩 */
+    .inherit-action-btn:active {
+      filter: brightness(0.95);
+      transform: scale(0.98);
+    }
+
+    /* ===== 9.1 日间模式按钮适配 =====
+     * 在干什么：日间模式下按钮底色更浅更亮，接近宣纸白，
+     *   文字色更深，边框色略深。
+     *
+     * 新手易错点：
+     *   - 日间按钮色比夜间按钮色更浅（#faf5ea vs #f5e6c8），因为日间页面整体更亮。
+     *   验证：切日间模式后，按钮颜色变浅，和浅色页面协调。
+     */
+    .inherit-page:not(.dark) .inherit-action-btn {
+      background: linear-gradient(180deg, #faf5ea 0%, #ede2c8 100%);
+      color: #4a3829;
+      border-color: #b89456;
+    }
+
+    /* ===== 10. 匠人详情弹窗（Modal） =====
+     * 在干什么：复用 master.html 的 modal 风格，适配黑金主题。
+     * 点击卡片弹出大师详情，点遮罩/关闭按钮/Esc 关闭。
+     */
+    .inherit-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 2000;
+    }
+
+    .inherit-modal--open {
+      display: flex;
+    }
+
+    .inherit-modal__panel {
+      background: var(--inherit-card-bg);
+      border-radius: 16px;
+      max-width: 400px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 20px 18px;
+      border: 1.5px solid var(--inherit-card-border);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      animation: inheritModalIn 0.25s ease both;
+    }
+
+    @keyframes inheritModalIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.96); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .inherit-modal__close {
+      display: block;
+      margin: 0 0 12px auto;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(200,164,102,0.15);
+      color: var(--inherit-text);
+      font-size: 22px;
+      line-height: 1;
+      border: 1px solid var(--inherit-card-border);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .inherit-modal__avatar {
+      width: 80px;
+      height: 100px;
+      border-radius: 8px;
+      margin: 0 auto 12px;
+      object-fit: cover;
+      border: 2px solid var(--inherit-card-border);
+      display: block;
+    }
+
+    /* 头像加载失败时的文字占位 */
+    .inherit-modal__avatar-placeholder {
+      width: 80px;
+      height: 100px;
+      border-radius: 8px;
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: serif;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      background: var(--inherit-scroll-bg);
+      border: 2px solid var(--inherit-card-border);
+    }
+
+    .inherit-modal__name {
+      text-align: center;
+      font-family: serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      margin: 0 0 6px;
+    }
+
+    .inherit-modal__level {
+      display: block;
+      text-align: center;
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      color: #f5efe0;
+      margin: 0 auto 14px;
+      width: fit-content;
+      background: rgba(156,36,36,0.8);
+    }
+
+    /* Modal中国家级：朱砂红（默认）*/
+    .inherit-modal__level--national {
+      background: rgba(156,36,36,0.8);
+      color: #f5efe0;
+    }
+
+    /* Modal中省级/理论大家：鎏金底 */
+    .inherit-modal__level--provincial {
+      background: rgba(200,164,102,0.8);
+      color: #1a1209;
+    }
+
+    /* Modal中民间/清末奠基：灰褐底 */
+    .inherit-modal__level--folk {
+      background: rgba(138,123,110,0.7);
+      color: #f5efe0;
+    }
+
+    .inherit-modal__story {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--inherit-text);
+      text-indent: 2em;
+    }
+
+    /* ===== 11. 冷门小故事气泡（长按彩蛋） =====
+     * 在干什么：长按匠人卡片 ≥1.5 秒弹出 trivia bubble。
+     * 样式复用 history.html 的 .trivia-bubble 风格。
+     */
+    .inherit-trivia {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      z-index: 500;
+      background: rgba(42,31,20,0.95);
+      color: #f5efe0;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(200,164,102,0.4);
+      max-width: 85vw;
+      font-family: sans-serif;
+      font-size: 13.5px;
+      line-height: 1.6;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.35s ease;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+    }
+
+    .inherit-trivia.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* 日间模式气泡底色 */
+    .inherit-page:not(.dark) .inherit-trivia {
+      background: rgba(237,229,213,0.95);
+      color: #4a3829;
+    }
+
+    /* ===== 12. 年轮互动弹窗（v3 重制版：全屏木板镌刻）=====
+     * 在干什么：点击"刻下我的坚持"按钮，全屏弹窗从底部滑入。
+     *   内含：木板年轮图 + SVG鎏金镌刻动画 + 宣纸输入框 + 双模式按钮。
+     *   支持一键自动镌刻（自动画三条弧线）和手动顺纹雕刻（手指沿纹路滑动）。
+     *   完成后显示守心印章 + 分享文案 + 保存/复制/返回三按钮。
+     *   关闭后联动：所有匠人卡片依次亮起柔光（triggerCardGlow）。
+     *
+     * 数据从哪来：背景图 wood_ring_base_clean.jpg 和 paper_input_box_base_16x9.jpg 在 assets/images/inherit/ 目录。
+     * 数据去哪：用户输入文字 → 完成页替换到结果文案中间；SVG路径d属性写死对应木板坐标。
+     *
+     * 新手易错点：
+     *   - 弹窗面板 inset:0 是全屏，不是原来的底部抽屉，用 translateY(100%)→translateY(0) 滑入。
+     *   - SVG viewBox="0 0 300 300"，手动绘制时需要把屏幕坐标换算成SVG坐标(scale=300/boardWidth)。
+     *   - stroke-dasharray/stroke-dashoffset 实现"画线"动画：先设dasharray=总长度，dashoffset=总长度，再动画到0。
+     *   - 状态类 ring-modal--state-start/carving/manual/finish 控制不同阶段的UI显示隐藏。
+     *   验证：
+     *     1) 点按钮弹窗从底部滑入，全屏木板背景，右上角×关闭
+     *     2) 输入文字 → 一键镌刻：三条弧线依次画出，木屑粒子跟随，最后守心印章弹出
+     *     3) 顺纹雕刻：沿木板滑动手指画线，画够长度完成
+     *     4) 完成页：输入框消失，显示结果文案，三按钮出现
+     */
+
+    /* 弹窗根容器：fixed全屏，默认隐藏（opacity:0 + pointer-events:none）*/
+    .inherit-ring-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1500;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+    .inherit-ring-modal--open {
+      pointer-events: auto;
+      opacity: 1;
+    }
+
+    /* 遮罩层：半透明黑，和匠人详情弹窗一致（75%黑）*/
+    .inherit-ring-modal__overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+    }
+
+    /* 弹窗面板：全屏木板背景，从底部滑入
+       inset:0 + background图片铺满 + 鎏金细边框 + 圆角 */
+    .inherit-ring-modal__panel {
+      position: absolute;
+      inset: 0;
+      background: url('assets/images/inherit/modal_carve_bg_dark_clea.jpg') center/cover no-repeat;
+      overflow-y: auto;
+      overflow-x: hidden;
+      transform: translateY(100%);
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      padding: 0;
+      border-radius: 16px;
+      border: 1px solid rgba(200,164,102,0.3);
+    }
+    .inherit-ring-modal--open .inherit-ring-modal__panel {
+      transform: translateY(0);
+    }
+    /* 鎏金内边框：背景图已自带金线框，此处移除，避免双线叠加 */
+    .inherit-ring-modal__panel::after {
+      content: none;
+    }
+
+    /* 宽屏适配：9:16比例锁定，弹窗面板居中显示（和页面主体一样）
+       人话讲：横屏/平板/桌面看时，面板不应该撑满宽屏，而是保持手机竖屏比例居中 */
+    @media (min-aspect-ratio: 9/16) {
+      .inherit-ring-modal__panel {
+        max-width: calc(100vh * 9 / 16);
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%) translateY(100%);
+      }
+      .inherit-ring-modal--open .inherit-ring-modal__panel {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+
+    /* 日间模式面板：叠一层宣纸米白半透明遮罩，让背景变浅
+       人话讲：日间模式整体是浅色调，但背景图是深色木板，用::before叠白色半透明 */
+    .inherit-page:not(.dark) .inherit-ring-modal__panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(248,245,237,0.85);
+      z-index: 0;
+      pointer-events: none;
+      border-radius: 16px;
+    }
+    /* 面板内所有直接子元素z-index设为1，浮在日间遮罩之上 */
+    .inherit-ring-modal__panel > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* 右上角关闭按钮：圆形半透明黑底 + 鎏金边 + 金色×字
+       触控区48x48px满足要求 */
+    .inherit-ring-modal__close {
+      position: absolute;
+      top: 24px;
+      right: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.3);
+      color: #c8a466;
+      font-size: 24px;
+      border: 1px solid rgba(200,164,102,0.4);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      -webkit-tap-highlight-color: transparent;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+    .inherit-ring-modal__close:active {
+      transform: scale(0.92);
+    }
+
+    /* ===== 标题区：居中，顶部留白给关闭按钮 ===== */
+    .inherit-ring-modal__header {
+      text-align: center;
+      padding: 48px 20px 4px;
+      position: relative;
+    }
+    .inherit-ring-modal__title {
+      font-family: serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #c8a466;
+      margin: 0;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      letter-spacing: 0.08em;
+    }
+    .inherit-ring-modal__subtitle {
+      font-family: serif;
+      font-size: 15px;
+      color: #c8a466;
+      opacity: 0.8;
+      margin: 8px 0 0;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      letter-spacing: 0.05em;
+    }
+    /* 日间模式标题：深木色 + 淡阴影 */
+    .inherit-page:not(.dark) .inherit-ring-modal__title {
+      color: #4a3829;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    }
+    .inherit-page:not(.dark) .inherit-ring-modal__subtitle {
+      color: #4a3829;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.15);
+    }
+
+    /* ===== 年轮木板区：正方形容器裁切，内部wrapper统一缩放让木头填满
+       人话讲：JPG图片木头周围有白底无法透明，内部wrapper放大1.4倍让白底溢出裁掉，overflow:hidden裁切
+       新手易错：用inner wrapper统一缩放所有子元素（img+svg+文字+印章），保证坐标对齐不偏移 */
+    .inherit-ring-board {
+      position: relative;
+      width: 68vw;
+      max-width: 255px;
+      aspect-ratio: 1/1;
+      margin: 0 auto;
+      overflow: hidden;
+      border-radius: 16px;
+      background: #2a1a0e;
+      border: 2px solid rgba(20,12,6,0.9);
+      box-sizing: border-box;
+      box-shadow: inset 0 0 25px 10px rgba(20,12,6,0.85);
+    }
+    .inherit-ring-board__inner {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform: scale(1.55);
+      transform-origin: center center;
+    }
+    /* 深色蒙层：让浅色木基底变暗，模拟深木色效果，鎏金轨迹在深色底上更醒目
+       人话讲：木基底图是浅色年轮，用半透明深棕色渐变蒙层（中心略亮四周更暗）直接覆盖，
+       不使用mix-blend-mode避免兼容性问题，既保留年轮纹理又让整体变暗，和黑金木纹风格统一 */
+    .inherit-ring-board__inner::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(50,28,12,0.72) 0%, rgba(32,17,7,0.82) 50%, rgba(20,10,4,0.92) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .inherit-ring-board__img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+      display: block;
+      position: relative;
+      z-index: 1;
+    }
+    /* SVG层：默认pointer-events:none（不拦截点击），手动模式下开启pointer-events接收触摸 */
+    .inherit-ring-board__svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 3;
+    }
+    /* 手动镌刻模式：SVG接收触摸/鼠标事件，touch-action:none禁止浏览器默认滚动
+       注意：类名是 ring-modal--state-manual（由JS的setRingState('manual')添加）
+       人话讲：手动模式下木板底图不拦截点击，SVG在最上层接收手指滑动事件 */
+    .ring-modal--state-manual .inherit-ring-board__svg {
+      pointer-events: auto;
+      touch-action: none;
+      z-index: 4;
+    }
+    .ring-modal--state-manual .inherit-ring-board__img {
+      pointer-events: none;
+    }
+
+    /* 文字标注：初学/经年/承艺，绝对定位在木板上对应鎏金弧线末端点旁
+       位置对照参考图：初学右上、经年左侧、承艺右下，都在木板区域内
+       新手易错：因为inner wrapper有scale(1.4)缩放，font-size和位置百分比要按缩小比例写，
+         视觉上才对。可见区域约是wrapper的14%-86%范围（超出会被board的overflow:hidden裁掉）*/
+    .ring-label {
+      position: absolute;
+      font-family: serif;
+      font-size: 12px;
+      color: #c8a466;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      letter-spacing: 0.1em;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 3;
+    }
+    .ring-label--start {
+      top: 25%;
+      right: 21%;
+    }
+    .ring-label--middle {
+      top: 48%;
+      left: 21%;
+    }
+    .ring-label--end {
+      bottom: 28%;
+      right: 21%;
+    }
+    /* 日间模式标注文字：深木色 */
+    .inherit-page:not(.dark) .ring-label {
+      color: #4a3829;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.15);
+    }
+
+    /* 鎏金弧线轨迹：用stroke-dasharray/offset实现画线动画
+       初始状态opacity:0隐藏，动画时JS会根据实际路径长度设置dasharray/offset
+       人话讲：深色刻槽阴影已经在SVG滤镜(ringGlow)里做了，CSS这边只做透明度过渡
+       新手易错：不要同时在CSS和SVG里加阴影，会叠加变脏且影响性能 */
+    .ring-trace {
+      transition: opacity 0.3s ease;
+    }
+    /* 鎏金标注点：加深色drop-shadow让圆点在木纹上跳出来 */
+    .ring-dot {
+      transition: opacity 0.3s ease;
+      filter: drop-shadow(0 1px 2px rgba(40,20,0,0.8));
+    }
+
+    /* ===== 中心守心印章：朱砂红竖排方章，弹性放大动画弹出
+       人话讲：初始scale(0)+opacity:0隐藏，加--show类后scale(1)+opacity:1弹出来
+       writing-mode:vertical-rl让文字竖排（"守""心"上下排列）
+       注意：尺寸写小一点，因为inner wrapper有scale(1.4)放大 */
+    .ring-seal-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      width: 34px;
+      height: 40px;
+      background: #9c2424;
+      color: #f8f5ed;
+      font-family: serif;
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      writing-mode: vertical-rl;
+      letter-spacing: 4px;
+      border-radius: 3px;
+      opacity: 0;
+      transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 5;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      pointer-events: none;
+    }
+    .ring-seal-center--show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    /* 木板上的提示文字：在木板底部区域，宣纸上方，鎏金色
+       人话讲：参考图中"写下你坚持了很久的一件事"是印在木板上的，不是placeholder
+       注意：font-size写小一点（11px→视觉约15px），因为inner wrapper有scale(1.4)放大 */
+    .ring-board-hint {
+      position: absolute;
+      bottom: 36%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: serif;
+      font-size: 11px;
+      color: #c8a466;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+      letter-spacing: 0.1em;
+      margin: 0;
+      white-space: nowrap;
+      z-index: 3;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+    /* 镌刻开始后隐藏木板提示文字 */
+    .ring-modal--state-carving .ring-board-hint,
+    .ring-modal--state-manual .ring-board-hint,
+    .ring-modal--state-finish .ring-board-hint {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .inherit-page:not(.dark) .ring-board-hint {
+      color: #4a3829;
+      text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+    }
+
+    /* ===== 木屑粒子容器：铺满木板区，不拦截事件 ===== */
+    .ring-particles {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    /* 单个木屑粒子：小矩形，CSS动画飘落+旋转+缩小消失
+       --rx/--ry/--rot是随机CSS变量，由JS创建时设置 */
+    .ring-particle {
+      position: absolute;
+      background: #c8a466;
+      opacity: 0;
+      pointer-events: none;
+      border-radius: 1px;
+      animation: ringParticleFall 1.2s ease-out forwards;
+    }
+    @keyframes ringParticleFall {
+      0% { opacity: 0; transform: translate(0,0) rotate(0deg) scale(0.5); }
+      20% { opacity: 0.3; }
+      100% { opacity: 0; transform: translate(var(--rx,10px), var(--ry,20px)) rotate(var(--rot,45deg)) scale(0.3); }
+    }
+
+    /* ===== 宣纸输入/展示区：宣纸底图 + 绝对定位文字层
+       用负margin-top让宣纸叠在木板底部上方，形成层次感
+       人话讲：aspect-ratio:16/9锁定宣纸比例和素材一致；overflow:hidden裁掉放大底图溢出的白边
+       新手易错：底图scale放大1.2倍裁白边，但文字/印章不跟着放大，要用百分比inset定位到纸张区域 */
+    .ring-paper-wrap {
+      position: relative;
+      width: 80%;
+      max-width: 290px;
+      aspect-ratio: 16/9;
+      margin: -10px auto 0;
+      z-index: 4;
+      overflow: hidden;
+      border-radius: 8px;
+      background: #ede2ce;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .ring-paper__bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(2.2);
+      transform-origin: center center;
+    }
+    /* 输入框：绝对定位在宣纸红色内框区域内，透明背景无边框，文字居中
+       人话讲：底图scale(2.2)放大后只露出纸条中心米色区域，红边被裁切了，inset用小边距
+       新手易错：移动端浏览器textarea默认有白色背景和内阴影，必须用appearance:none和box-shadow:none清掉 */
+    .ring-paper__input {
+      position: absolute;
+      inset: 8% 8% 8% 8%;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: serif;
+      font-size: 14px;
+      color: #4a3829;
+      line-height: 1.6;
+      resize: none;
+      text-align: center;
+      -webkit-appearance: none;
+      appearance: none;
+      box-shadow: none;
+      padding: 0;
+      margin: 0;
+    }
+    /* 完成页结果文案：默认隐藏，finish状态显示，小边距因为放大后只露出中心书写区 */
+    .ring-paper__result {
+      position: absolute;
+      inset: 6% 10% 6% 10%;
+      display: none;
+      font-family: serif;
+      font-size: 11px;
+      color: #4a3829;
+      line-height: 1.55;
+      text-align: center;
+      margin: 0;
+      padding-right: 24px;
+      padding-bottom: 2px;
+      box-sizing: border-box;
+    }
+    /* 时光有痕印章：右下角朱砂红小方章，贴宣纸右下角 */
+    .ring-paper__seal {
+      position: absolute;
+      right: 5%;
+      bottom: 5%;
+      width: 26px;
+      height: 26px;
+      border: 1.5px solid #9c2424;
+      border-radius: 2px;
+      color: #9c2424;
+      font-family: serif;
+      font-size: 7px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.1;
+      letter-spacing: 0.5px;
+      z-index: 2;
+    }
+
+    /* ===== 提示文字：操作指引（如"沿年轮纹路滑动手指镌刻"）===== */
+    .ring-hint {
+      text-align: center;
+      color: #c8a466;
+      font-size: 13px;
+      opacity: 0.7;
+      margin: 8px 0 0;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+      min-height: 20px;
+    }
+    /* 日间模式提示文字：深木色 */
+    .inherit-page:not(.dark) .ring-hint {
+      color: #4a3829;
+    }
+
+    /* ===== 按钮组：flex布局，海棠形圆角，和主页面按钮风格一致 ===== */
+    .ring-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      padding: 16px 20px calc(20px + env(safe-area-inset-bottom,0px));
+    }
+    /* 按钮样式：复用主页面按钮的牙白渐变 + 海棠形圆角(30px/26px)
+       border-radius:30px/26px 是海棠形（横向椭圆），国风特色 */
+    .ring-btn {
+      flex: 1;
+      max-width: 180px;
+      min-height: 48px;
+      padding: 12px 16px;
+      border-radius: 30px/26px;
+      background: linear-gradient(180deg,#f7edd6 0%,#ead6ab 50%,#ddc493 100%);
+      border: 1.5px solid #c8a466;
+      color: #4a3829;
+      font-family: serif;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(100,70,30,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: filter 0.2s ease, transform 0.2s ease;
+    }
+    .ring-btn--small {
+      font-size: 13px;
+      padding: 10px 12px;
+      max-width: 120px;
+    }
+    .ring-btn:hover {
+      filter: brightness(1.05);
+    }
+    .ring-btn:active {
+      filter: brightness(0.95);
+      transform: scale(0.98);
+    }
+    .ring-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ===== 状态控制：默认只显示初始按钮，finish状态切换到完成按钮 =====
+       人话讲：用状态类控制哪些元素显示/隐藏，不用JS逐个style.display
+       - ring-actions--finish 默认隐藏（display:none）
+       - finish状态：隐藏start按钮、显示finish按钮、隐藏输入框、显示结果文案 */
+    .ring-actions--finish { display: none; }
+    .ring-paper__result { display: none; }
+    .ring-paper__seal { display: none; }
+    .ring-modal--state-finish .ring-actions--start { display: none; }
+    .ring-modal--state-finish .ring-actions--finish { display: flex; }
+    .ring-modal--state-finish .ring-paper__input { display: none; }
+    .ring-modal--state-finish .ring-paper__result { display: block; }
+    .ring-modal--state-finish .ring-paper__seal { display: flex; }
+
+    /* ===== 保存图片提示弹层（微信浏览器降级用）=====
+       在干什么：微信不支持JS触发下载，所以弹出浮层让用户长按图片保存。
+       全屏半透明黑底，居中显示图片和提示文字。 */
+    .ring-save-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      flex-direction: column;
+    }
+    .ring-save-overlay--show {
+      display: flex;
+    }
+    .ring-save-overlay__box {
+      background: #2a1f14;
+      border: 1px solid #c8a466;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      max-width: 80%;
+    }
+    .ring-save-overlay__box p {
+      color: #c8a466;
+      font-family: serif;
+      margin: 0 0 12px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    .ring-save-overlay__box img {
+      max-width: 260px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(200,164,102,0.3);
+    }
+    /* 日间模式保存弹层：宣纸米白底 */
+    .inherit-page:not(.dark) .ring-save-overlay__box {
+      background: #f8f5ed;
+    }
+
+    /* ===== Toast轻提示：居中显示，半透明黑底圆角 ===== */
+    .ring-toast {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: #c8a466;
+      font-family: serif;
+      font-size: 14px;
+      padding: 10px 24px;
+      border-radius: 20px;
+      border: 1px solid rgba(200,164,102,0.3);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 30;
+    }
+    .ring-toast--show {
+      opacity: 1;
+    }
+    /* 日间模式Toast：白底深字 */
+    .inherit-page:not(.dark) .ring-toast {
+      background: rgba(255,255,255,0.95);
+      color: #4a3829;
+    }
+    /* 日间模式关闭按钮：浅底深字 */
+    .inherit-page:not(.dark) .inherit-ring-modal__close {
+      background: rgba(255,255,255,0.6);
+      color: #4a3829;
+      border-color: rgba(74,56,41,0.3);
+      text-shadow: none;
+    }
+    /* 日间模式遮罩：浅色半透明 */
+    .inherit-page:not(.dark) .inherit-ring-modal__overlay {
+      background: rgba(248,245,237,0.7);
+    }
+
+    /* ===== 13. 底部固定导航栏 =====
+     * 在干什么：复用 style.css 的 .bottom-nav 标准导航，
+     *   "传承"项加 .bottom-nav__item--active 高亮朱砂红。
+     *   不另写导航样式，全站共用一套，保证视觉统一。
+     */
+    /* 传承页导航背景色适配（浅色模式用统一白色，深色模式跟随主题） */
+    .inherit-page:not(.dark) .bottom-nav {
+      background: rgba(255, 253, 248, 0.98);
+      border-top-color: rgba(212, 175, 55, 0.2);
+      backdrop-filter: blur(10px);
+    }
+    .inherit-page.dark .bottom-nav {
+      background: var(--inherit-card-bg);
+      border-top-color: rgba(200,164,102,0.2);
+      transition: background 0.4s ease, border-top-color 0.4s ease;
+    }
+
+    /* 传承页导航文字颜色适配 */
+    .inherit-page:not(.dark) .bottom-nav__item {
+      color: var(--color-text-light);
+    }
+    .inherit-page.dark .bottom-nav__item {
+      color: var(--inherit-text-secondary);
+    }
+
+    .inherit-page:not(.dark) .bottom-nav__item--active {
+      color: var(--color-red);
+    }
+    .inherit-page.dark .bottom-nav__item--active {
+      color: #c8a466;
+    }
+
+    /* ===== 14. 响应式微调 =====
+     * 在干什么：小屏幕下调整卡片尺寸、间距和文字大小，保证移动端体验。
+     *   宽屏下9:16比例锁定，页面居中显示。
+     */
+    @media (max-width: 430px) {
+      .inherit-title { font-size: 34px; }
+      .inherit-subtitle { font-size: 16px; }
+      .inherit-title-area { padding-top: 20px; }
+      .inherit-cards-section { margin-top: 3vh; }
+      .inherit-card--featured { transform: scale(1.025) translateY(2px) !important; }
+      .inherit-card { transform: translateY(-2px) scale(0.94); }
+      .inherit-timeline { padding: 10px 20px 4px; }
+      .inherit-label { font-size: 15px; }
+      .inherit-gold-line { height: 22px; }
+      .inherit-transition-text { margin-top: 8px; padding: 8px 20px 6px; }
+      .inherit-actions { padding: 4px 16px 8px; }
+    }
+
+    /* 390px以下屏幕：过渡文字适当缩小 */
+    @media (max-width: 390px) {
+      .inherit-transition-text { font-size: 16px; }
+    }
+
+    @media (max-width: 360px) {
+      .inherit-title { font-size: 30px; }
+      .inherit-title-area { padding-top: 16px; }
+      .inherit-card { flex: 0 0 108px; }
+      .inherit-cards-scroll { padding: 5px calc(50% - 54px); gap: 8px; }
+      .inherit-action-btn { font-size: 13px; padding: 10px 12px; }
+      .inherit-card--featured { transform: scale(1.02) translateY(1px) !important; }
+      .inherit-card { transform: translateY(-1px) scale(0.93); }
+      .inherit-timeline { padding: 8px 16px 4px; }
+      .inherit-label { font-size: 14px; }
+      .inherit-gold-line { height: 20px; margin: 2px 0; }
+      .inherit-transition-text { margin-top: 6px; font-size: 15px; padding: 6px 16px 6px; }
+      .inherit-actions { padding: 4px 12px 8px; gap: 8px; }
+    }
+
+    /* ===== 宽屏适配：9:16比例锁定后，顶部按钮和粒子层对齐页面内容区 =====
+     * 人话讲：当屏幕宽高比大于9:16时（横屏/平板/桌面），页面居中显示，
+     *   但 position:fixed 的元素是相对视口定位的，不会跟随页面居中。
+     *   用 calc 计算右侧偏移：(视口宽 - 页面宽)/2 + 16px 内边距，
+     *   这样按钮就不会跑到屏幕最右边缘，而是贴着页面内容区右边界。
+     */
+    @media (min-aspect-ratio: 9/16) {
+      .inherit-top-controls {
+        right: calc((100vw - min(100vw, 100vh * 9 / 16)) / 2 + 16px);
+      }
+      .inherit-particles {
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: calc(100vh * 9 / 16);
+        width: 100%;
+      }
+    }
+
+    /* ===== 匠语漫行全屏模态 ===== */
+    /* 人话讲：全屏覆盖的黑色容器，默认隐藏，点击按钮后淡入 */
+    .jiangyu-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+      overflow: hidden;
+    }
+    .jiangyu-modal.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* 背景图：匠语漫行UI */
+    .jiangyu-modal__bg {
+      position: absolute;
+      inset: 0;
+      background: url('assets/images/inherit/jiangyu_bg.jpg') center center / cover no-repeat;
+      z-index: 0;
+    }
+
+    /* 右上角关闭按钮：更明显的金色边框和半透明深色背景，让用户一眼看到
+       人话讲：按钮边框加粗加深，背景更暗，金色更亮，确保在黑色背景上非常醒目 */
+    .jiangyu-modal__close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid rgba(212, 175, 55, 0.8);
+      background: rgba(0, 0, 0, 0.6);
+      color: #f5e6a8;
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.3s ease;
+      -webkit-tap-highlight-color: transparent;
+      text-shadow: 0 0 8px rgba(232, 201, 104, 0.6);
+      box-shadow: 0 0 15px rgba(232, 201, 104, 0.3);
+    }
+    .jiangyu-modal__close:active {
+      transform: scale(0.9);
+      background: rgba(0, 0, 0, 0.75);
+    }
+
+    /* 飘字区域：避开中央"潮州木雕"竖排文字区域，顶部留60px，底部留200px给光球
+       人话讲：中央区域留给背景图的"潮州木雕"四个大字，飘字在两侧区域滑过（JS控制垂直位置分布）
+       新手易错点：不能让飘字盖住背景图上的核心文字，所以区域要给够，但实际位置由JS控制在上下两区 */
+    .jiangyu-floating {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      right: 0;
+      bottom: 200px;
+      overflow: hidden;
+      z-index: 2;
+    }
+
+    /* 单条飘字：透明度提高到0.45，让文字更清晰可读，但不要太抢眼
+       人话讲：文字从屏幕右侧外面开始，向左滑动，初始位置 left:100% 保证从右外进入
+       新手易错点：如果不设置left，绝对定位元素默认在左边，文字会从左往右消失而不是从右往左滑
+       字体调整：基础字体从16px改为20px，让飘字更清晰易读 */
+    .jiangyu-floating__item {
+      position: absolute;
+      left: 100%; /* 初始位置在容器右侧外面，从右往左滑 */
+      white-space: nowrap;
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 20px;
+      color: #e8d4a0;
+      opacity: 0;
+      animation: jiangyuFloat linear forwards;
+      text-shadow: 0 0 10px rgba(200, 164, 102, 0.5), 0 1px 3px rgba(0,0,0,0.6);
+      pointer-events: none;
+    }
+
+    /* 飘字动画：从右侧外滑入（left:100% + translateX(0)），到左侧外滑出
+       人话讲：从屏幕右边进来，穿过整个屏幕，从左边出去，文字更清晰但不抢中央大字焦点
+       新手易错点：translateX 是在 left:100% 基础上再偏移，所以 calc(-100% - 100vw) 刚好完全滑出左侧 */
+    @keyframes jiangyuFloat {
+      0% {
+        transform: translateX(0);
+        opacity: 0;
+      }
+      8% {
+        opacity: 0.45;
+      }
+      92% {
+        opacity: 0.45;
+      }
+      100% {
+        transform: translateX(calc(-100% - 100vw));
+        opacity: 0;
+      }
+    }
+
+    /* 点击文字容器：透明、无圆形、无边框，仅作为定位和点击区域
+       人话讲：圆形光球去掉了，div 只保留定位和点击绑定，视觉上只剩"点击"两个字
+       新手易错点：top:50% + translate(-50%,-50%) 是经典水平垂直居中，手机端也会自动居中 */
+    .jiangyu-orb {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      z-index: 5;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.2s ease;
+    }
+    .jiangyu-orb:active {
+      transform: translate(-50%, -50%) scale(0.94);
+    }
+
+    /* 中央"点击"文字：淡鎏金色、字体加大、无边框无背景
+       人话讲：用户要求只保留淡鎏金文字，字体大一点，去掉圆形按钮
+       新手易错点：letter-spacing 把两个字间距拉开，但不要过大显得松散 */
+    .jiangyu-orb__text {
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 28px;
+      color: #c8a466;
+      font-weight: 500;
+      letter-spacing: 6px;
+      text-shadow: 0 0 12px rgba(200, 164, 102, 0.5);
+      position: relative;
+      z-index: 2;
+      pointer-events: none; /* 点击事件仍由容器 div 处理 */
+    }
+
+    /* 祝福语弹窗遮罩：半透明黑色 */
+    .jiangyu-blessing {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+    .jiangyu-blessing.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .jiangyu-blessing__overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    .jiangyu-blessing__panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 85%;
+      max-width: 340px;
+      background: linear-gradient(180deg, rgba(255,253,245,0.98) 0%, rgba(245,239,224,0.98) 100%);
+      border: 1px solid rgba(212, 175, 55, 0.5);
+      border-radius: 16px;
+      padding: 32px 24px 24px;
+      text-align: center;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .jiangyu-blessing__text {
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 16px;
+      line-height: 1.9;
+      color: #3A2A1E;
+      margin: 0 0 24px;
+      letter-spacing: 0.05em;
+    }
+
+    .jiangyu-blessing__close {
+      padding: 10px 36px;
+      border-radius: 30px / 26px;
+      border: 1.5px solid #c8a466;
+      background: linear-gradient(180deg, #faf5ea 0%, #ede2c8 100%);
+      color: #4a3829;
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.2s ease, filter 0.2s ease;
+      box-shadow:
+        0 3px 10px rgba(92,64,51,0.12),
+        inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+    .jiangyu-blessing__close:active {
+      transform: scale(0.96);
+      filter: brightness(0.95);
+    }
+
+    /* 手机端适配：窄屏下调整各元素尺寸和位置
+       人话讲：手机屏幕小，文字和按钮都要适当缩小，但保持比例协调
+       新手易错点：光球容器不再设置宽高（已去掉圆形），手机端只调文字大小即可 */
+    @media (max-width: 480px) {
+      .jiangyu-orb__text {
+        font-size: 22px;
+        letter-spacing: 4px;
+      }
+      .jiangyu-floating__item {
+        font-size: 17px !important; /* 覆盖JS设置的inline style */
+      }
+      .jiangyu-modal__close {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+        top: 12px;
+        right: 12px;
+      }
+      .jiangyu-blessing__panel {
+        width: 90%;
+        padding: 24px 20px;
+      }
+      .jiangyu-blessing__text {
+        font-size: 15px;
+        line-height: 1.8;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!--
+    .inherit-page：传承页根容器
+    默认浅色宣纸模式，点月亮按钮可切换深色模式。
+  -->
+  <div class="inherit-page" id="inheritPage">
+
+    <!-- ===== 1. 固定顶部控件（右上角月亮） ===== -->
+    <div class="inherit-top-controls">
+      <!-- 月亮按钮：明暗模式切换 -->
+      <button class="inherit-top-btn" id="darkModeBtn" aria-label="切换明暗模式">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- ===== 2. 页面顶部标题区 ===== -->
+    <div class="inherit-title-area">
+      <h1 class="inherit-title">传承</h1>
+      <p class="inherit-subtitle">以刀刻木，以心守艺</p>
+      <p class="inherit-note">注：匠人生平资料搜集自公开文献与网络素材，若存在信息疏漏，欢迎指正</p>
+    </div>
+
+    <!-- ===== 3. 横向滚动匠人卡片容器 ===== -->
+    <section class="inherit-cards-section" id="cardsSection" aria-label="匠人卡片">
+      <div class="inherit-cards-scroll inherit-cards-scroll--init" id="cardsScroll">
+        <!-- JS 动态渲染 4 张卡片 -->
+      </div>
+    </section>
+
+    <!-- ===== 4. 时间轴（金线 + 初学/经年/承艺，正常文档流）=====
+         人话讲：放在卡片和过渡文字之间，用 flex 纵向排列，
+         不再用 vh 绝对定位，彻底解决不同屏幕上文字重叠问题。 -->
+    <div class="inherit-timeline">
+      <p class="inherit-label">初学</p>
+      <div class="inherit-gold-line"></div>
+      <p class="inherit-label">经年</p>
+      <div class="inherit-gold-line"></div>
+      <p class="inherit-label">承艺</p>
+    </div>
+
+    <!-- 旧的绝对定位标注层（保留元素供 JS 引用，但 CSS 已设 display:none 隐藏） -->
+    <div class="inherit-overlay" id="parallaxOverlay"></div>
+
+    <!-- ===== 5. 过渡导语 ===== -->
+    <div class="inherit-transition-text">
+      匠人数十年与木相伴，在木纹刻下<span class="inherit-text-highlight">初学</span>、<span class="inherit-text-highlight">经年</span>、<span class="inherit-text-highlight">承艺</span>的痕迹。<br>
+      你亦奔赴属于自己的漫长时光，不妨刻下你的坚持。
+    </div>
+
+    <!-- ===== 6. 底部并排双圆角按钮 ===== -->
+    <div class="inherit-actions">
+      <button class="inherit-action-btn" id="btnViewMasters">匠语漫行</button>
+      <button class="inherit-action-btn" id="btnMyPersistence">刻下我的坚持</button>
+    </div>
+
+    <!-- ===== 7. 匠人详情弹窗（Modal） ===== -->
+    <div class="inherit-modal" id="masterModal" role="dialog" aria-modal="true" aria-labelledby="modalName" aria-hidden="true">
+      <div class="inherit-modal__panel">
+        <button class="inherit-modal__close" id="modalClose" aria-label="关闭">×</button>
+        <div id="modalAvatarWrap"></div>
+        <h3 class="inherit-modal__name" id="modalName"></h3>
+        <span class="inherit-modal__level" id="modalLevel"></span>
+        <p class="inherit-modal__story" id="modalStory"></p>
+      </div>
+    </div>
+
+    <!-- ===== 8. 冷门小故事气泡（长按彩蛋） ===== -->
+    <div class="inherit-trivia" id="triviaBubble" aria-hidden="true"></div>
+
+    <!-- ===== 9. 年轮互动弹窗（v3 重制版：木板镌刻 + 宣纸输入 + 一键/手动双模式）===== -->
+    <!-- 人话讲：点击"刻下我的坚持"从底部滑入全屏弹窗
+         包含：木板年轮图 + SVG鎏金轨迹 + 宣纸输入框 + 双按钮（一键/手动镌刻）
+         完成后显示守心印章 + 分享文案 + 保存/复制/返回三按钮 -->
+    <div class="inherit-ring-modal ring-modal--state-start" id="ringModal" role="dialog" aria-modal="true" aria-labelledby="ringModalTitle" aria-hidden="true">
+      <div class="inherit-ring-modal__overlay" id="ringOverlay"></div>
+      <div class="inherit-ring-modal__panel" id="ringPanel">
+        <!-- 右上角关闭按钮 -->
+        <button class="inherit-ring-modal__close" id="ringClose" aria-label="关闭">×</button>
+
+        <!-- 标题区 -->
+        <div class="inherit-ring-modal__header">
+          <h3 class="inherit-ring-modal__title" id="ringModalTitle">刻下我的坚持</h3>
+          <p class="inherit-ring-modal__subtitle">顺着年轮，刻下那些属于你的时光</p>
+        </div>
+
+        <!-- 年轮木板区：底图 + SVG鎏金轨迹 + 文字标注 + 中心印章 + 木屑粒子容器 -->
+        <div class="inherit-ring-board" id="ringBoard">
+          <div class="inherit-ring-board__inner">
+          <img class="inherit-ring-board__img" src="assets/images/inherit/wood_ring_base_clean.jpg" alt="年轮木板" loading="lazy">
+          <!-- SVG鎏金轨迹层：viewBox固定300x300，坐标和图片1:1对应
+               路径坐标对照wood_ring_base_clean.jpg上实际鎏金弧线位置 -->
+          <svg class="inherit-ring-board__svg" id="ringSvg" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid meet">
+            <!-- 鎏金刻线：双层描边实现"刻槽嵌金"效果
+                 人话讲：每条线画两遍——底下画一条略粗的深棕色线当凹槽阴影，上面画亮金线当嵌金
+                 这比复杂SVG滤镜兼容性好，老旧安卓也能正常显示
+                 新手易错：底层线要比上层粗1-2px，颜色要深，否则出不来凹槽立体感 -->
+            <defs>
+              <filter id="ringGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="0.8" result="blur"/>
+                <feMerge>
+                  <feMergeNode in="blur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+            <!-- 刻槽阴影层（深棕色粗线，在金线下面）-->
+            <path class="ring-trace ring-trace--shadow" d="M 188,98 Q 160,130 150,155" fill="none" stroke="#2a1505" stroke-width="4.5" stroke-linecap="round" opacity="0" stroke-linejoin="round"/>
+            <path class="ring-trace ring-trace--shadow" d="M 98,192 Q 125,165 150,155" fill="none" stroke="#2a1505" stroke-width="4.5" stroke-linecap="round" opacity="0" stroke-linejoin="round"/>
+            <path class="ring-trace ring-trace--shadow" d="M 208,228 Q 180,190 150,155" fill="none" stroke="#2a1505" stroke-width="4.5" stroke-linecap="round" opacity="0" stroke-linejoin="round"/>
+            <!-- 用户手动绘制的刻槽阴影层（3条线，每条一个path）-->
+            <path id="ringUserTraceShadow1" d="" fill="none" stroke="#2a1505" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="0"/>
+            <path id="ringUserTraceShadow2" d="" fill="none" stroke="#2a1505" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="0"/>
+            <path id="ringUserTraceShadow3" d="" fill="none" stroke="#2a1505" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="0"/>
+            <!-- 亮金主线层（略细，在阴影上面）-->
+            <path class="ring-trace ring-trace--gold" d="M 188,98 Q 160,130 150,155" fill="none" stroke="#e8c968" stroke-width="2.8" stroke-linecap="round" opacity="0" filter="url(#ringGlow)"/>
+            <path class="ring-trace ring-trace--gold" d="M 98,192 Q 125,165 150,155" fill="none" stroke="#e8c968" stroke-width="2.8" stroke-linecap="round" opacity="0" filter="url(#ringGlow)"/>
+            <path class="ring-trace ring-trace--gold" d="M 208,228 Q 180,190 150,155" fill="none" stroke="#e8c968" stroke-width="2.8" stroke-linecap="round" opacity="0" filter="url(#ringGlow)"/>
+            <!-- 用户手动绘制的亮金轨迹层（3条线，每条一个path）-->
+            <path id="ringUserTrace1" d="" fill="none" stroke="#e8c968" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" opacity="0" filter="url(#ringGlow)"/>
+            <path id="ringUserTrace2" d="" fill="none" stroke="#e8c968" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" opacity="0" filter="url(#ringGlow)"/>
+            <path id="ringUserTrace3" d="" fill="none" stroke="#e8c968" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" opacity="0" filter="url(#ringGlow)"/>
+            <!-- 鎏金标注点：亮金圆点+深色描边，镌刻时逐个亮起 -->
+            <circle class="ring-dot ring-dot--start" cx="188" cy="98" r="4.5" fill="#e8c968" stroke="#2a1505" stroke-width="1" opacity="0"/>
+            <circle class="ring-dot ring-dot--middle" cx="98" cy="192" r="4.5" fill="#e8c968" stroke="#2a1505" stroke-width="1" opacity="0"/>
+            <circle class="ring-dot ring-dot--end" cx="208" cy="228" r="4.5" fill="#e8c968" stroke="#2a1505" stroke-width="1" opacity="0"/>
+          </svg>
+          <!-- 文字标注：初学/经年/承艺，用百分比定位在木板上 -->
+          <span class="ring-label ring-label--start">初学</span>
+          <span class="ring-label ring-label--middle">经年</span>
+          <span class="ring-label ring-label--end">承艺</span>
+          <!-- 木板上的输入提示文字（初始状态显示，开始镌刻后隐藏）-->
+          <p class="ring-board-hint" id="ringBoardHint">写下你坚持了很久的一件事</p>
+          <!-- 守心印章（完成页弹出，朱砂红竖排印章）-->
+          <div class="ring-seal-center" id="ringCenterSeal">守心</div>
+          <!-- 镌刻中散落木屑装饰容器（JS动态创建粒子）-->
+          <div class="ring-particles" id="ringParticles"></div>
+          </div>
+        </div>
+
+        <!-- 宣纸输入/展示区：底图宣纸 + 输入框/结果文案 + 时光有痕印章 -->
+        <div class="ring-paper-wrap">
+          <img class="ring-paper__bg" src="assets/images/inherit/paper_input_box_base_16x9.jpg" alt="" aria-hidden="true">
+          <!-- 初始状态：输入框，最多80字 -->
+          <textarea class="ring-paper__input" id="ringInput" placeholder="写下你坚持了很久的一件事" rows="2" maxlength="80"></textarea>
+          <!-- 完成状态：展示文案 -->
+          <p class="ring-paper__result" id="ringResult">
+            潮州木雕匠人以刀刻木，耗费半生守望一门手艺；<br>
+            你以岁月奔赴心中所爱，<br>
+            所有长久的坚持，皆值得被看见。
+          </p>
+          <!-- 时光有痕印章（右下角朱砂红小章）-->
+          <div class="ring-paper__seal">时光<br>有痕</div>
+        </div>
+
+        <!-- 提示文字（顺纹雕刻模式时显示操作指引）-->
+        <p class="ring-hint" id="ringHint"></p>
+
+        <!-- 初始页按钮：双按钮（一键镌刻 / 顺纹雕刻）-->
+        <div class="ring-actions ring-actions--start" id="ringActionsStart">
+          <button class="ring-btn" id="btnAutoCarve">一键镌刻 &verbar; 快速体验</button>
+          <button class="ring-btn" id="btnManualCarve">顺纹雕刻 &verbar; 亲手沿纹路镌刻</button>
+        </div>
+
+        <!-- 完成页按钮：三按钮（保存/复制/返回）-->
+        <div class="ring-actions ring-actions--finish" id="ringActionsFinish">
+          <button class="ring-btn ring-btn--small" id="btnSaveImage">保存时光木卷</button>
+          <button class="ring-btn ring-btn--small" id="btnCopyText">复制分享文案</button>
+          <button class="ring-btn ring-btn--small" id="btnBackToPage">返回长卷</button>
+        </div>
+      </div>
+      <!-- 保存图片提示弹层（微信浏览器降级用：提示用户长按保存）-->
+      <div class="ring-save-overlay" id="ringSaveOverlay" aria-hidden="true">
+        <div class="ring-save-overlay__box">
+          <p>长按图片保存到相册</p>
+          <img id="ringSaveImg" alt="时光木卷">
+          <button class="ring-btn ring-btn--small" id="btnCloseSave">关闭</button>
+        </div>
+      </div>
+      <!-- Toast轻提示（居中显示，自动消失）-->
+      <div class="ring-toast" id="ringToast" role="alert"></div>
+    </div>
+
+    <!-- ===== 10. 匠语漫行全屏模态 ===== -->
+    <div class="jiangyu-modal" id="jiangyuModal" role="dialog" aria-modal="true" aria-label="匠语漫行" aria-hidden="true">
+      <!-- 背景图 -->
+      <div class="jiangyu-modal__bg"></div>
+      <!-- 鎏金光球（提前到第二位置，确保光球在飘字和关闭按钮下层） -->
+      <div class="jiangyu-orb" id="jiangyuOrb">
+        <span class="jiangyu-orb__text">点击</span>
+      </div>
+      <!-- 右上角关闭按钮 -->
+      <button class="jiangyu-modal__close" id="jiangyuClose" aria-label="关闭">×</button>
+      <!-- 飘字区域 -->
+      <div class="jiangyu-floating" id="jiangyuFloating"></div>
+      <!-- 祝福语弹窗 -->
+      <div class="jiangyu-blessing" id="jiangyuBlessing" aria-hidden="true">
+        <div class="jiangyu-blessing__overlay"></div>
+        <div class="jiangyu-blessing__panel">
+          <p class="jiangyu-blessing__text" id="jiangyuBlessingText"></p>
+          <button class="jiangyu-blessing__close" id="jiangyuBlessingClose">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 11. 木屑粒子容器 ===== -->
+    <div class="inherit-particles" id="particlesContainer"></div>
+
+    <!--
+      新手易错点：preload="none" 避免页面加载时请求不存在的文件产生 404。
+      验证：F12 Network 面板刷新页面，不应出现 guqin-loop.mp3 的 404 请求。
+    -->
+    <!-- ===== 12. 底部固定全局导航栏（复用 style.css 的 .bottom-nav） ===== -->
+    <nav class="bottom-nav" aria-label="主导航">
+      <a href="index.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3.5 10.3 12 3.6l8.5 6.7"/>
+            <path d="M5.2 9.7v10.1a1 1 0 0 0 1 1h11.6a1 1 0 0 0 1-1V9.7"/>
+            <path d="M10 20.8v-5.2h4v5.2"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">首页</span>
+      </a>
+
+      <a href="history.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 4.2h10.4a2 2 0 0 1 2 2v12.3a1.5 1.5 0 0 0 1.5 1.5H8a2 2 0 0 1-2-2Z"/>
+            <path d="M6 4.2A2 2 0 0 0 4 6.2v1.7h2"/>
+            <path d="M9.3 9h5.2M9.3 13h5.2"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">历史</span>
+      </a>
+
+      <a href="inherit.html" class="bottom-nav__item bottom-nav__item--active" aria-current="page">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="8.5" cy="8.2" r="2.8"/>
+            <path d="M3.4 19.8c.5-3.3 2.7-5.4 5.1-5.4s4.6 2.1 5.1 5.4"/>
+            <circle cx="16.8" cy="9.2" r="2.3"/>
+            <path d="M14.4 19.8c.3-2.1 1.7-3.8 4-4.1"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">传承</span>
+      </a>
+
+      <a href="ai.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="8.4" y="3.3" width="7.2" height="11.2" rx="3.6"/>
+            <path d="M5.4 11c0 3.7 2.8 6.3 6.6 6.3s6.6-2.6 6.6-6.3"/>
+            <path d="M12 17.5V21"/>
+            <path d="M9.2 21h5.6"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">AI</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <!-- 引入全站公共工具函数（escapeHtml、safeColor），必须在内联脚本之前加载 -->
+  <script src="js/common.js"></script>
+  <script>
+    /* ============================================================
+     * 传承页 · 交互逻辑
+     * 分层解耦：数据层 / 渲染层 / 交互层 分离
+     * ============================================================ */
+
+    // ===== 【数据层】18 位匠人数据（按代际排序：清末奠基→宗师→国家级→当代中坚→新生代）=====
+    // 数据从哪来：《潮州木雕大师人物志.docx》权威资料，严格依据文档编写。
+    // 数据去哪：被 renderCards() 遍历，生成 DOM 渲染到页面。
+    //
+    // 新手易错点：
+    //   - 图片路径相对于 inherit.html，本文件在项目根目录，图片在 assets/images/inherit/ 里。
+    //   - 无公开肖像的匠人用 portrait: false 直接显示首字占位，不发起不存在图片请求。
+    //   - defaultCenter 标记哪张卡片默认居中显示（陈培臣，index=4，首批国家级大师代表）。
+    //   验证：console.log(MASTERS.length) 应为 18。
+    var MASTERS = [
+      // ===== 一、清末奠基者（无照片，首字占位）=====
+      {
+        name: '黄开贤',
+        level: 'folk',
+        levelText: '清末奠基',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/黄开贤.jpg',
+        portrait: false,
+        story: '黄开贤，清末潮州木雕传奇人物，时人称为"木雕状元"。他在潮州青龙古庙横梁上以半通雕形式首创多层镂通《半畔蟹篓》，是"龙虾蟹篓"这一潮州木雕标志性题材的开山之作。相传他路过市场见渔人蟹篓中螃蟹爬动有趣，买回仔细观察，琢磨出让螃蟹活现于木雕之法。半个世纪后，这件作品启发了张鉴轩、陈舜羌师徒，将其改进为立体圆雕走向世界。',
+        trivia: '黄开贤因见市场蟹篓中螃蟹活灵活现而突发灵感，买回螃蟹反复观察，最终创出"蟹篓"题材，从此"龙虾蟹篓"成为潮州木雕的标志性符号。',
+        initial: '黄'
+      },
+      {
+        name: '张愚',
+        level: 'folk',
+        levelText: '清末奠基',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/张愚.jpg',
+        portrait: false,
+        story: '张愚，清末潮州意溪镇莲上乡人，在家乡兴办木雕作坊，无私培养弟子，使莲上村成为远近闻名的"潮州木雕之乡"，家家有作坊、户户有师傅。其衣钵由同乡张鉴轩接过，是潮州木雕近代师承谱系的关键源头——张愚传张鉴轩，张鉴轩传陈舜羌，陈舜羌传陈培臣、陈培希，一条清晰的传承链由此开端。',
+        trivia: '张愚留下训徒之语："刀不离手，手不离木，三年入门，十年成家。"这句话在莲上村老艺人中代代口传。',
+        initial: '张'
+      },
+
+      // ===== 二、走向世界的宗师（无照片，首字占位）=====
+      {
+        name: '张鉴轩',
+        level: 'national',
+        levelText: '一代宗师',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/张鉴轩.jpg',
+        portrait: false,
+        story: '张鉴轩（1897—1972），潮州意溪莲上乡人，师承张愚，十二岁拜师学艺，从事木雕六十余年。1957年与徒弟陈舜羌受黄开贤"半畔蟹篓"启发，创作可四面观赏的圆雕《蟹篓》，在莫斯科第六届世界青年联欢节获铜质奖章——这是潮州木雕获得的第一个国际大奖，首次把潮州木雕推向世界舞台。北京人民大会堂广东厅的《雉鸡梅雀图》等亦出自他手。他总结的"杂杂、匀匀、通通"六字被公认为潮州木雕美学核心纲领。',
+        trivia: '张鉴轩大师总结潮州木雕特色的六字诀"杂杂、匀匀、通通"："杂杂"指内容丰富饱满，"匀匀"指主次分明，"通通"指镂空透雕有空间感，被后世奉为圭臬。',
+        initial: '张'
+      },
+      {
+        name: '陈舜羌',
+        level: 'national',
+        levelText: '一代宗师',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/陈舜羌.jpg',
+        portrait: false,
+        story: '陈舜羌（1919—1987），张鉴轩得意弟子，中国美术家协会会员。1957年与师傅共创立体通雕《蟹篓》获莫斯科世青节铜奖，使潮州木雕蜚声中外。1979年赴京参与人民大会堂广东厅雕饰装修，《雉鸡五福梅》《龙虾蟹配鱼》等悬挂于广东厅成为划时代精品。育有二子陈培臣、陈培希，皆为木雕名家，其孙女陈嘉亦为90后传承人，奠定了陈氏木雕世家的根基。他常说："刀是手的延伸，手是心的延伸。心到，刀才能到。"',
+        trivia: '陈舜羌不善言辞，徒弟李得浓回忆他最常说的一句话是："除了你认认真真地从艺，还要胸怀宽广，对事不对人。"李得浓说师傅影响他最大的是人格魅力。',
+        initial: '陈'
+      },
+
+      // ===== 三、首批国家级传承人与理论大家（有照片）=====
+      {
+        name: '陈培臣',
+        level: 'national',
+        levelText: '国家级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/陈培臣.jpg',
+        story: '陈培臣（1950年生），陈舜羌长子，第一批国家级非遗潮州木雕代表性传承人，潮州木雕界首位中国工艺美术大师。13岁随父学艺，精通浮雕、通雕、圆雕。1979年随父参与人民大会堂广东厅装修；2000年双面通雕《岭南佳果》被广东省政府选送人民大会堂；1998年用2.2米原木创作《龙虾蟹篓》，雕出18只龙虾、28只螃蟹共46只虾蟹，2001年获广东省首届工艺名家名作展金奖。子陈树东、侄女陈嘉承袭衣钵，实现"一门三代五件作品进人民大会堂"的文化佳话。',
+        trivia: '陈培臣托雕刀的手掌上有一块很大的茧，一个月就要削掉一次，像剪指甲一样；他的右大拇指是左大拇指的1.5倍粗，这是五十年木雕生涯留下的印记。',
+        initial: '陈',
+        defaultCenter: true
+      },
+      {
+        name: '陈培希',
+        level: 'provincial',
+        levelText: '省级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/陈培希.jpg',
+        story: '陈培希（1962年生），陈舜羌之子、陈培臣之弟，广东省高级工艺美术师、中国传统工艺美术大师。1980年随父到金漆木雕厂习艺，作品尤以多层次龙虾蟹篓镂通雕刻著称。代表作《篓中篓五篓一体虾蟹篓》利用2.1米原木五篓一体、篓中有篓，2011年送展期间受到国家领导人肯定；《三篓绝配》被中国工艺美术馆收藏；《松竹梅》《秋黄》《金鸡报喜》《双篓秋趣》等多次获国家级、省级金奖。2017年创办陈培希木雕艺术馆任馆长。女儿陈嘉为90后传承人。',
+        trivia: '陈培希曾心疼学艺受伤的女儿陈嘉说"女孩子还是找个轻松的工作干吧"，但陈嘉拒绝放弃，咬牙坚持了下来，最终成为潮州木雕界知名的90后女传承人。',
+        initial: '陈'
+      },
+      {
+        name: '李得浓',
+        level: 'national',
+        levelText: '国家级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/李得浓.jpg',
+        story: '李得浓（1949—2016），第六届中国工艺美术大师、首批国家级非遗传承人，被誉为潮州木雕的"顶梁大匠"。师从陈舜羌，运斤持凿四十余载，在保留传统多层次镂通雕基础上注入雕塑体积语言和绘画构图关系，形成"玲珑剔透而不失凝重，多层次镂通而不繁琐"的独特风格。代表作《锦上添花》获中国工艺美术大师精品博览会金奖。自1998年至2005年间共获国家及省级以上金奖13项、银奖21项。著名汉学大师饶宗颐为其题写楹联"方家有神技，大匠无弃材"。2016年逝世，享年67岁。',
+        trivia: '李得浓大师对作品要求极高，他说："如果滥竽充数，那等于工艺的垃圾，对传统艺术的提升没有好处，只有坏处。"他始终坚持"木雕的制作要达到以后的文物水平"。',
+        initial: '李'
+      },
+      {
+        name: '辜柳希',
+        level: 'national',
+        levelText: '国家级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/辜柳希.jpg',
+        story: '辜柳希（1954年生），第一批国家级非遗传承人、中国工艺美术大师、享受国务院特殊津贴专家，2012年获首届"中华非物质文化遗产传承人薪传奖"。1971年师从陈春炎学艺，最大贡献是摸索出花梨木、小叶紫檀、酸枝等硬质木料雕刻技法，填补潮州木雕硬木创作空白。1989年创办艺葩木雕厂，2011年被文化部授予"国家级非物质文化遗产生产性保护示范基地"。与5名徒弟历时6年完成的3.28米花梨木《三层龙虾蟹篓》获2008年深圳文博会特别金奖。免费培养学徒近300人，团队年产量1200件以上。',
+        trivia: '辜柳希说："吃亏是肯定的，但为了让这门手艺能够完整地传承下去，值！"他认为一般年轻人要学两三年才能出师，但"十年时间才能做一个工匠——我给你一个造型题材，你能按着做，这才叫出师"。',
+        initial: '辜'
+      },
+      {
+        name: '杨坚平',
+        level: 'national',
+        levelText: '理论大家',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/杨坚平.jpg',
+        story: '杨坚平（1932年生），2005年荣获"中国工艺美术终身成就奖"（我国授予工艺美术专家个人的最高奖），后又获"中华非物质文化遗产传承薪传奖"。从事潮汕民间工艺美术研究与设计逾68年，编著《潮州民间美术全集》（含木雕卷、剪纸卷、陶瓷卷、潮绣抽纱卷）及《潮汕工艺美术》《潮州木雕研究》等，获第五届国际潮学奖特等奖。1980年被委任为潮州开元寺总工艺师，主持佛像木雕装饰工程；1990年主持泰国曼谷紫真阁木雕设计；曾与张鉴轩、陈舜羌等合作为人民大会堂广东厅创作。长期担任《中国工艺美术全集》广东卷主编。',
+        trivia: '关山月1952年对杨坚平说的一句话改变了他一生："学油画是西方人的事，潮州民间工艺非常有特色，我倒建议你去研究当地民间工艺。"从此他扎根潮汕工艺研究近七十年。',
+        initial: '杨'
+      },
+
+      // ===== 四、当代中坚力量（有照片+无照片）=====
+      {
+        name: '金子松',
+        level: 'national',
+        levelText: '省级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/金子松.jpg',
+        story: '金子松（1956年生），国家级非遗潮州木雕省级传承人、中国工美行业艺术大师。1973年师从陈舜羌、刘林德学艺。1999年为马来西亚拿督府设计制作大型金漆木雕《红楼梦·大观园》（3×3.5米，66个人物，近20个景组），以元春省亲为主线全境式展示贾府场景，《人民日报》专题报道，被誉为"马中文化交流史上值得记载的一页"。2016年创新镂通双面多层次刀法，完成《群仙贺寿》双面通雕屏座，突破传统单面观赏限制。2020年10月12日，习近平总书记考察潮州广济楼，金子松现场汇报潮州木雕现状，总书记肯定道："这是富有民族特色的东西！"',
+        trivia: '金子松在广济楼上向习近平总书记汇报后说："老老实实地去做，用身体用时间去做，知识也好，手艺也好，来不得一点虚假。"他还说"匠心就是甘于寂寞，我一辈子都学不完"。',
+        initial: '金'
+      },
+      {
+        name: '李中庆',
+        level: 'national',
+        levelText: '中国工艺美术大师',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/李中庆.jpg',
+        story: '李中庆（1964年生），浙江东阳人，第八届中国工艺美术大师、全国劳动模范、南粤工匠，现任潮州市东潮木雕艺术馆艺术总监。幼时因小儿麻痹症左腿落下残疾，17岁进入木雕行业，师从东阳名家郭志高。1991年携刀带艺来到潮州，创立"东潮木雕艺术流派"——将东阳木雕平面浮雕与潮州木雕沉雕、通雕等技法结合，独创雕刻主体以30至45度角斜立于底板的独特技术。潜心数年将宋代张择端《清明上河图》以通雕形式再现于木中，八百多人物、一百二十余座屋宇错落有致，一战成名。2005年带领团队参与修复潮州广济桥。',
+        trivia: '李中庆第一次看到潮州木雕时惊呆了："一只只螃蟹趴在镂空的蟹篓中，太精美了！"他把自己叫作"木头人"，因为"我这一生都在跟木头打交道"。他还说："放低姿态才能飞得更高。"',
+        initial: '李'
+      },
+      {
+        name: '林汉旋',
+        level: 'national',
+        levelText: '国家级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/林汉旋.jpg',
+        story: '林汉旋（1963年生），广东揭阳揭西人，第六批国家级非遗潮州木雕代表性传承人（2024年公布）。1980年进入揭阳工艺厂工作，从艺逾40年。自幼随父学习雕刻，又得福建多位名师指点，擅长古建筑木雕装饰和摆件木雕，曾为30多座古建筑设计制作木雕装饰，参与揭阳城隍庙、关帝庙、进贤门、天后宫、雷神庙等文保单位修缮工程。其制作的《百戏屏》梁楣木雕创造戏剧场面和人物众多之最，作品获全国工艺精品"山花奖"。培养250多名弟子，其中70多名学徒先后开办木雕工作室。',
+        trivia: '林汉旋教徒弟常说："木雕入门先磨刀，学会磨刀，刀会利才能做好工作。"他还把学木雕比作堆积木："一样一样慢慢深造起来。"',
+        initial: '林'
+      },
+      {
+        name: '郭少俊',
+        level: 'national',
+        levelText: '国家级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/郭少俊.jpg',
+        story: '郭少俊（1967年生），广东潮安后郭村人（"广东省民间传统木雕之乡"），国家非遗潮州木雕项目代表性传承人、广东省工艺美术大师、正高级工艺美术师。参与过潮州开元寺、古大士庵、叩齿庵等文物保护单位木雕修缮工程。代表作《陆文龙双枪战五将》获2019中国工艺美术文化创意奖金奖；《铮铮铁骨中华魂》获2021广东省工艺美术精品奖金奖；作品《家》获首届中国工艺美术博览会"百鹤杯"百鹤奖。2019年创办郭少俊木雕艺术馆，是潮州首家潮州木雕专题研学游基地；2025年入选全国乡村工匠名师培育对象名单，成为潮州首位获此国家级荣誉的乡村工匠。其子郭奕辉已成为年轻一代传承人。',
+        trivia: '郭少俊木雕艺术馆的官方格言是："于国，匠心之士为重器；于家，匠心之士为顶梁；于人，匠心之士为楷模。"',
+        initial: '郭'
+      },
+      {
+        name: '陈德丰',
+        level: 'national',
+        levelText: '国家级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/陈德丰.jpg',
+        story: '陈德丰（1969年生），广东揭阳惠来人，第六批国家级非遗潮州木雕代表性传承人（2024年公布），中国工美行业艺术大师、广东省工艺美术大师、广东省五一劳动奖章获得者、南粤工匠，惠来县工艺美术协会会长。1988年高中毕业后师从普宁木雕艺人陈登轩，1992年创办木雕作坊，2011年创办"惠来德丰木雕工艺培训中心"，至今培训学徒30多人。多次打破潮州木雕以樟木雕刻的传统，挑战花梨木、柚木等硬质木料。由于惠来靠近海洋，作品尤其钟情表现海洋文化。其木雕作品曾连续五届在中国（深圳）国际文化产业博览会上获金奖。',
+        trivia: '陈德丰说自己是"一个用木头讲故事的非遗传承人"。他学艺时每天早上7点多开始雕刻，一直忙到傍晚6点，晚上再向老师傅请教，"哪里做得不好要认真琢磨，直到做到逼真"。',
+        initial: '陈'
+      },
+      {
+        name: '卢进文',
+        level: 'national',
+        levelText: '省级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/卢进文.jpg',
+        story: '卢进文（约1972年生），出生于潮州湘桥西都村木雕世家，祖上四代传承木雕技艺，1987年起随祖父、家父从事传统建筑木结构和木雕设计制作。广东省工艺美术大师、潮州市最美工匠、湘桥区文园木雕艺术馆馆长。在继承传统基础上注重植入现代绘画元素，作品更富生机灵气。多件作品被新西兰非遗馆及广东省珍品馆永久收藏，获国家级奖项9个、省级23个。2017年起被韩山师范学院等聘为木雕客座教授，平均每年培养约50名学生。2023年带领团队研发潮州木雕文创手信礼品。',
+        trivia: '卢进文正式出师源于一次潮州木雕传统的"斗艺"——主人建屋时在大堂中间竖起一道墙，请两位师傅各负责一侧装饰，完工拆墙时一比高下，卢进文以精湛的画稿赢得认可与全部工程。',
+        initial: '卢'
+      },
+
+      // ===== 五、新生代传承人（有照片）=====
+      {
+        name: '陈树东',
+        level: 'provincial',
+        levelText: '新生代传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/陈树东.jpg',
+        story: '陈树东，陈培臣之子、陈舜羌之孙，陈氏木雕世家第三代传人，高级工艺师，现担任陈舜羌木雕艺术馆馆长。其作品陈列于人民大会堂广东厅，与父亲、祖父一起实现了"一门三代木雕大师作品均被人民大会堂收藏"的文化佳话。陈氏祖孙三代共有5件木雕作品被人民大会堂收藏，这在潮州木雕史上是独一无二的荣耀。',
+        trivia: '陈培臣代述家风时说了一句令人动容的话："祖孙三代，一把刀；人民大会堂，三代人的考场。"这把刀从陈舜羌传到陈培臣，再传到陈树东手中。',
+        initial: '陈'
+      },
+      {
+        name: '陈嘉',
+        level: 'provincial',
+        levelText: '区级传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/陈嘉.jpg',
+        story: '陈嘉（90后），陈培希之女、陈培臣之侄女，潮州木雕世家第四代传人，潮州木雕界为数极少的女手艺人，国家级非遗潮州木雕区级代表性传承人。14岁正式拜师父亲学艺，入门第一课便是每天蹲着磨刀两三个小时，手被磨起泡、被刻刀划伤是家常便饭，右手无名指因长时间按压刻刀已经变形。她另辟蹊径走出"小而精"创作路线——把重达几十斤的龙虾蟹篓浓缩为打火机大小的微型作品，还制作香薰、笔筒、木梳等文创产品。2025年5月7日，《人民日报》"文化遗产"版刊发《雕，磨炼的不仅是手上功夫》专题报道其匠心故事。',
+        trivia: '陈嘉说："朋友一直笑我说，人家是不撞南墙不回头，你是撞了南墙还要撞。"她的心得是："想要做好一件作品，必须要有三心：静心、耐心、细心。"她希望"潮州木雕能离生活更近些"。',
+        initial: '陈'
+      },
+      {
+        name: '郭奕辉',
+        level: 'provincial',
+        levelText: '新生代传承人',
+        tagText: '潮州木雕传承人',
+        img: 'assets/images/inherit/郭奕辉.jpg',
+        story: '郭奕辉（1998年生），郭少俊之子，潮州木雕世家第四代传人，17岁起随父学艺，潮州木雕最年轻的非遗传承人之一，广东省工艺美术师。曾受邀担任央视CCTV-1《诗画中国》节目嘉宾。擅长将传统木雕与现代家居装饰结合，曾尝试哪吒等动漫IP形象雕刻，并通过抖音、小红书等平台记录非遗技艺，让更多年轻人了解潮州木雕。他说学习木雕前期要学习制作上百种不一样的刀具，一开始以为磨得很好了，父亲却总是说还不够，后来才理解"父亲对非遗工艺的严格更是责任与传承"。',
+        trivia: '郭奕辉一开始对潮州木雕并不感兴趣，主要是因为"苦"——"学习制作木雕太苦太累，前期要学习制作刀具，上百根不一样的刀……"但他最终理解了父亲的严格，接过了传承的接力棒。',
+        initial: '郭'
+      }
+    ];
+
+    // ===== 【状态层】 =====
+    var isDarkMode = true; // 默认夜间模式
+    var longPressTimer = null;
+    var particleCount = 0;
+    var MAX_PARTICLES = 30; // 木屑粒子上限
+    var featuredTicking = false; // rAF 节流标记：防止同一帧内多次计算焦点卡片
+    var parallaxTicking = false; // rAF 节流标记：视差滚动
+    var lastScrollY = 0;
+    var particleSpawnAccumulator = 0;
+
+    // ===== 【DOM 引用】预先抓取，避免重复查询 =====
+    var page = document.getElementById('inheritPage');
+    var cardsScroll = document.getElementById('cardsScroll');
+    var cardsSection = document.getElementById('cardsSection');
+    var masterModal = document.getElementById('masterModal');
+    var modalClose = document.getElementById('modalClose');
+    var modalAvatarWrap = document.getElementById('modalAvatarWrap');
+    var modalName = document.getElementById('modalName');
+    var modalLevel = document.getElementById('modalLevel');
+    var modalStory = document.getElementById('modalStory');
+    var triviaBubble = document.getElementById('triviaBubble');
+    var particlesContainer = document.getElementById('particlesContainer');
+    var parallaxOverlay = document.getElementById('parallaxOverlay');
+    var darkModeBtn = document.getElementById('darkModeBtn');
+    var btnViewMasters = document.getElementById('btnViewMasters');
+    var btnMyPersistence = document.getElementById('btnMyPersistence');
+
+    // ===== 【年轮弹窗 v3 DOM引用】所有新弹窗元素 =====
+    // 人话讲：一次性把所有要用的DOM元素都取出来存变量里，避免每次操作都querySelector
+    var ringModal = document.getElementById('ringModal');
+    var ringOverlay = document.getElementById('ringOverlay');
+    var ringPanel = document.getElementById('ringPanel');
+    var ringClose = document.getElementById('ringClose');
+    var ringBoard = document.getElementById('ringBoard');
+    var ringSvg = document.getElementById('ringSvg');
+    var ringInput = document.getElementById('ringInput');
+    var ringResult = document.getElementById('ringResult');
+    var ringCenterSeal = document.getElementById('ringCenterSeal');
+    var ringParticles = document.getElementById('ringParticles');
+    var ringHint = document.getElementById('ringHint');
+    var ringActionsStart = document.getElementById('ringActionsStart');
+    var ringActionsFinish = document.getElementById('ringActionsFinish');
+    var btnAutoCarve = document.getElementById('btnAutoCarve');
+    var btnManualCarve = document.getElementById('btnManualCarve');
+    var btnSaveImage = document.getElementById('btnSaveImage');
+    var btnCopyText = document.getElementById('btnCopyText');
+    var btnBackToPage = document.getElementById('btnBackToPage');
+    var ringSaveOverlay = document.getElementById('ringSaveOverlay');
+    var ringSaveImg = document.getElementById('ringSaveImg');
+    var btnCloseSave = document.getElementById('btnCloseSave');
+    var ringToast = document.getElementById('ringToast');
+    // 用户手动绘制轨迹：3条线，每条对应一个金线path和阴影path
+    var userTracePaths = [
+      document.getElementById('ringUserTrace1'),
+      document.getElementById('ringUserTrace2'),
+      document.getElementById('ringUserTrace3')
+    ];
+    var userTraceShadows = [
+      document.getElementById('ringUserTraceShadow1'),
+      document.getElementById('ringUserTraceShadow2'),
+      document.getElementById('ringUserTraceShadow3')
+    ];
+    var ringTracesGold = ringSvg.querySelectorAll('.ring-trace--gold');
+    var ringTracesShadow = ringSvg.querySelectorAll('.ring-trace--shadow');
+    var ringDots = ringSvg.querySelectorAll('.ring-dot');
+
+    // ===== 【年轮弹窗状态变量】=====
+    // 在干什么：记录弹窗当前状态，避免重复操作/动画冲突
+    var isRingModalOpen = false;     // 弹窗是否打开
+    var isCarving = false;           // 是否正在镌刻动画中（防止重复点击）
+    var manualDrawing = false;       // 手动镌刻模式：是否正在画线
+    var manualPathPoints = [];       // 手动镌刻：当前正在画的这一条线的触摸点数组
+    var manualLinesCount = 0;        // 手动镌刻：已经画完的线条数（0/1/2/3）
+    var manualAllPaths = [];         // 手动镌刻：存储所有已画完的线的点数组，用于保存图片
+    var currentTraceIndex = 0;       // 手动镌刻：当前正在画第几条线（0=第一条, 1=第二条, 2=第三条）
+    var ringParticleCount = 0;       // 当前木板区木屑粒子数量
+    var MAX_RING_PARTICLES = 20;     // 木板区粒子上限
+    var ringAnimFrameId = null;      // requestAnimationFrame ID，用于取消动画
+    var wasInFinishState = false;    // 关闭前是否处于完成态（决定是否触发卡片柔光）
+    var lastMasterTrigger = null;    // 关闭人物详情后恢复焦点
+    var lastRingTrigger = null;      // 关闭年轮互动后恢复焦点
+
+    // ===== 【渲染层】渲染匠人卡片 =====
+    // 在干什么：遍历 MASTERS 数组，每张卡片生成 HTML 拼进滚动容器。
+    // 数据从哪来：MASTERS 数组。
+    // 数据去哪：变成 DOM 显示在 .inherit-cards-scroll 里。
+    //
+    // 新手易错点：
+    //   - 图片用 loading="lazy" 懒加载，非首屏卡片不急于加载。
+    //   - onerror 处理图片加载失败：用 div + 首字占位，不显示裂图。
+    //   验证：断网刷新页面，应看到首字占位而不是裂图。
+    function renderCards() {
+      var html = '';
+      MASTERS.forEach(function(m, index) {
+        var tagClass = 'inherit-card__tag';
+        if (m.level === 'national') tagClass += ' inherit-card__tag--national';
+        else if (m.level === 'provincial') tagClass += ' inherit-card__tag--provincial';
+        else if (m.level === 'folk') tagClass += ' inherit-card__tag--folk';
+
+        html += ''
+          + '<div class="inherit-card" data-index="' + index + '" role="button" tabindex="0" aria-label="查看' + escapeHtml(m.name) + '的传承故事">'
+          +   '<div class="inherit-card__img-wrap">'
+          +     (m.portrait === false
+                ? '<div class="inherit-card__placeholder" aria-label="' + escapeHtml(m.name) + '暂无公开肖像">' + escapeHtml(m.initial) + '</div>'
+                : '<img class="inherit-card__img" src="' + escapeHtml(m.img) + '" alt="' + escapeHtml(m.name) + '" loading="lazy">')
+          +     '<div class="inherit-card__seal" aria-label="长按查看' + escapeHtml(m.name) + '小故事">' + escapeHtml(m.initial) + '</div>'
+          +   '</div>'
+          +   '<div class="inherit-card__info">'
+          +     '<h3 class="inherit-card__name">' + escapeHtml(m.name) + '</h3>'
+          +     '<span class="' + tagClass + '">'
+          +       '<span class="inherit-card__tag-line">潮州木雕</span>'
+          +       '<span class="inherit-card__tag-line">传承人</span>'
+          +     '</span>'
+          +   '</div>'
+          + '</div>';
+      });
+      cardsScroll.innerHTML = html;
+
+      // 给每张图片绑定回退，占位符只在图片确实加载失败时出现。
+      var allImgs = cardsScroll.querySelectorAll('.inherit-card__img');
+      allImgs.forEach(function(img) {
+        img.onerror = function() {
+          var card = this.closest('.inherit-card');
+          var idx = parseInt(card.getAttribute('data-index'), 10);
+          if (isNaN(idx) || !MASTERS[idx]) return;
+          var placeholder = document.createElement('div');
+          placeholder.className = 'inherit-card__placeholder';
+          placeholder.textContent = MASTERS[idx].initial;
+          this.replaceWith(placeholder);
+        };
+      });
+
+      // 初始默认居中卡片：动态查找 defaultCenter 标记的匠人（辜柳希，index=1）
+      // 人话讲：这里必须用"双重 requestAnimationFrame"来延时，不能立即执行。
+      //   浏览器会把 innerHTML、scrollIntoView、classList 修改全部攒在一起批量处理，
+      //   如果在同一个渲染帧内既创建元素又添加 featured 类，浏览器会认为 featured 状态
+      //   就是"初始状态"，不会触发过渡动画，甚至可能因渲染优化导致样式不生效。
+      //   双重 rAF 确保：第一帧浏览器完成布局和首次绘制（卡片先以非焦点态渲染出来），
+      //   第二帧再滚动到默认卡片并添加焦点类，此时浏览器能看到"从无到有"的变化，
+      //   过渡动画正常触发、样式正确应用。
+      // 新手易错点：
+      //   - 不要用 setTimeout 0 代替 rAF，setTimeout 在事件循环中的时机不确定；
+      //   - 单个 rAF 可能还在同一批渲染中，双重 rAF 才能确保至少一帧已绘制；
+      //   - scrollIntoView 会触发 scroll 事件，scroll 事件里也会调用 updateFeaturedCard，
+      //     所以最终效果是：先滚动到位，然后焦点类正确添加并播放过渡动画。
+      //   验证：页面加载后，辜柳希卡片应在正中央，比其他卡片大且亮，过渡动画自然完成。
+      var defaultIndex = MASTERS.findIndex(function(m) { return m.defaultCenter; });
+      if (defaultIndex === -1) defaultIndex = 1;
+
+      // 人话讲：用 setTimeout 100ms 而非 requestAnimationFrame，确保：
+      //   1) 浏览器完成 DOM 布局和首次绘制（卡片先以非焦点态显示）
+      //   2) scrollIntoView 的滚动定位生效
+      //   3) updateFeaturedCard 基于最终布局位置计算焦点卡片
+      //   4) 最后移除 init 类启用过渡动画
+      // 初始化阶段卡片容器带 .inherit-cards-scroll--init 类（transition:none），
+      // 所以焦点状态的应用是瞬间跳变，不会出现动画卡死问题。
+      setTimeout(function() {
+        // 找真实区（非克隆）的默认卡片，避免 querySelector 选到前缀克隆里的同名卡片
+        var defaultCard = cardsScroll.querySelector('.inherit-card[data-index="' + defaultIndex + '"]');
+        if (defaultCard) {
+          // 不用 scrollIntoView（会被 scroll-snap 干扰跳错位置），
+          // 直接精确计算 scrollLeft = 卡片左偏移 - (容器宽 - 卡片宽)/2，使卡片居中
+          var targetScrollLeft = defaultCard.offsetLeft - (cardsScroll.clientWidth - defaultCard.offsetWidth) / 2;
+          cardsScroll.scrollLeft = targetScrollLeft;
+          updateFeaturedCard();
+          setTimeout(function() {
+            cardsScroll.classList.remove('inherit-cards-scroll--init');
+          }, 50);
+        }
+      }, 300);
+
+    }
+
+    // ===== 【交互层】卡片焦点态自动切换（v2 新增核心功能）=====
+    // 在干什么：监听卡片容器的横向滚动事件，用 requestAnimationFrame 节流，
+    //   计算每张卡片的中心点相对于容器可视区域中心的距离，
+    //   距离最近的那张添加 .inherit-card--featured 类（放大突出），其余移除。
+    //   实现"滑动时中间卡片自动放大"的错落焦点效果。
+    //
+    // 新手易错点：
+    //   - scroll 事件触发频率极高（每秒几十次），必须用 rAF (requestAnimationFrame) 节流，
+    //     否则会导致滚动卡顿。ticking 标记确保同一帧内只执行一次计算。
+    //   - 计算距离时用 offsetLeft（布局坐标）获取卡片在滚动容器中的位置，
+    //     再和容器的中心点比较，差值的绝对值越小说明越接近中心。
+    //   - 用 offsetLeft + offsetWidth/2 计算卡片布局中心，不受 CSS transform 缩放影响；
+    //     scroll-snap 对齐的也是布局位置，所以这种方式最准确。
+    //   验证方法：左右滑动卡片，居中的那张应自动放大、加阴影、下沉；
+    //             滑动过程流畅不卡顿；快速滑动时不会出现两张卡片同时放大的 bug。
+    var currentFeaturedCard = null;
+
+    function updateFeaturedCard() {
+      var cards = cardsScroll.querySelectorAll('.inherit-card');
+      if (cards.length === 0) {
+        featuredTicking = false;
+        return;
+      }
+
+      // 用布局坐标（offsetLeft/scrollLeft）计算中心点，而非 getBoundingClientRect 视觉坐标
+      // 人话讲：getBoundingClientRect 会返回 CSS transform 缩放后的视觉位置，
+      //   卡片放大缩小时视觉中心会"漂移"，导致计算结果反复横跳、过渡动画无法完成；
+      //   offsetLeft 是 DOM 布局层面的坐标，不受 transform 影响，永远稳定。
+      //   新手易错点：不要用 getBoundingClientRect 来判断 scroll-snap 的吸附位置，
+      //     因为 snap 对齐的是布局位置，不是视觉位置。
+      var containerCenterX = cardsScroll.scrollLeft + cardsScroll.clientWidth / 2;
+
+      var closestCard = null;
+      var closestDistance = Infinity;
+
+      cards.forEach(function(card) {
+        var cardCenterX = card.offsetLeft + card.offsetWidth / 2;
+        var distance = Math.abs(cardCenterX - containerCenterX);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestCard = card;
+        }
+      });
+
+      // 只有当焦点卡片真正变化时才切换类名，避免无意义的重绘打断过渡动画
+      if (closestCard === currentFeaturedCard) {
+        featuredTicking = false;
+        return;
+      }
+
+      if (currentFeaturedCard) {
+        currentFeaturedCard.classList.remove('inherit-card--featured');
+      }
+      closestCard.classList.add('inherit-card--featured');
+      currentFeaturedCard = closestCard;
+
+      featuredTicking = false;
+    }
+
+    // 监听卡片容器的 scroll 事件，用 rAF 节流
+    // 新手易错点：这里监听的是 cardsScroll 的 scroll 事件（横向滚动），
+    //   不是 window 的 scroll（竖向滚动）。不要搞混。
+    // 卡片只保留一组真实数据，避免重复 DOM 和无障碍朗读。
+
+    // scroll 事件中更新焦点卡片（rAF 节流，保证流畅）
+    cardsScroll.addEventListener('scroll', function() {
+      if (!featuredTicking) {
+        requestAnimationFrame(updateFeaturedCard);
+        featuredTicking = true;
+      }
+    });
+
+    // ===== 【交互层】卡片点击 → 弹出详情弹窗 =====
+    // 人话讲：用事件委托，在滚动容器上统一监听点击，
+    //   而不是给每张卡片单独绑事件（省内存、好维护）。
+     cardsScroll.addEventListener('click', function(e) {
+      if (e.target.closest('.inherit-card__seal')) return;
+      var card = e.target.closest('.inherit-card');
+      if (!card) return;
+      var index = parseInt(card.getAttribute('data-index'), 10);
+      var m = MASTERS[index];
+      if (!m) return;
+      lastMasterTrigger = card;
+       openMasterModal(m);
+     });
+
+    cardsScroll.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var card = e.target.closest('.inherit-card');
+      if (!card || e.target.closest('.inherit-card__seal')) return;
+      e.preventDefault();
+      var index = parseInt(card.getAttribute('data-index'), 10);
+      if (!MASTERS[index]) return;
+      lastMasterTrigger = card;
+      openMasterModal(MASTERS[index]);
+    });
+
+    // ===== 【交互层】手势方向识别 + 长按检测 =====
+    // 在干什么：
+    //   1) 手指按下时（无论是否按在卡片上）记录起点，初始化手势状态；
+    //      若按在印章上同时启动长按计时器（1.5秒出小故事气泡）。
+    //   2) 手指移动超过阈值后判断方向：
+    //      - 横向位移 > 纵向位移 × 1.3 → 判定为横滑（卡片切换），
+    //        由浏览器原生 overflow-x:auto + touch-action:pan-x 处理横向滚动。
+    //      - 否则判定为竖滑（页面滚动），给容器加 lock-x 类，
+    //        临时禁止 overflow-x，避免卡片跟着左右乱动。
+    //   3) 只要手指移动超过 10px，就取消长按计时器（滑动不触发气泡）。
+    //   4) 松手时重置方向锁、清除长按计时器；同时用 hasMoved 标记阻止滑动后的误点击弹窗。
+    //   5) 桌面端滚轮/触控板横向滑动：wheel 事件将水平滚动量映射到卡片容器。
+    //
+    // 修复点：原代码 touchstart 里 `if (!card) return;` 导致手指按在卡片间隙/留白区时
+    //   手势状态未初始化，滑动无法正确判定方向、lock-x 无法移除。
+    //   现在无论从哪开始触摸都正确初始化，印章长按逻辑仅在触摸印章时生效。
+    var longPressStartX = 0;
+    var longPressStartY = 0;
+    var LONG_PRESS_DURATION = 1500;
+    var MOVE_THRESHOLD = 10;
+    var LONGPRESS_CANCEL_THRESHOLD = 10;
+    var gestureState = 'none'; // 'none' | 'horizontal' | 'vertical'
+    var hasMoved = false; // 是否发生过滑动（用于阻止误点击弹窗）
+    var longPressTriggered = false; // 长按是否已触发（用于阻止长按后的误点击）
+
+    // 触摸开始：始终初始化手势跟踪；仅在触摸印章时启动长按计时
+    cardsScroll.addEventListener('touchstart', function(e) {
+      longPressStartX = e.touches[0].clientX;
+      longPressStartY = e.touches[0].clientY;
+      gestureState = 'none';
+      hasMoved = false;
+      longPressTriggered = false;
+      cardsScroll.classList.remove('inherit-cards-scroll--lock-x');
+
+      var card = e.target.closest('.inherit-card');
+      var isOnSeal = !!e.target.closest('.inherit-card__seal');
+      if (card && isOnSeal) {
+        var index = parseInt(card.getAttribute('data-index'), 10);
+        longPressTimer = setTimeout(function() {
+          longPressTriggered = true;
+          showTrivia(MASTERS[index].trivia);
+        }, LONG_PRESS_DURATION);
+      }
+    }, { passive: true });
+
+    cardsScroll.addEventListener('touchmove', function(e) {
+      var dx = e.touches[0].clientX - longPressStartX;
+      var dy = e.touches[0].clientY - longPressStartY;
+      var absDx = Math.abs(dx);
+      var absDy = Math.abs(dy);
+
+      if (absDx > LONGPRESS_CANCEL_THRESHOLD || absDy > LONGPRESS_CANCEL_THRESHOLD) {
+        hasMoved = true;
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      }
+
+      if (gestureState === 'none' && (absDx > MOVE_THRESHOLD || absDy > MOVE_THRESHOLD)) {
+        if (absDx > absDy * 1.3) {
+          gestureState = 'horizontal';
+        } else {
+          gestureState = 'vertical';
+          cardsScroll.classList.add('inherit-cards-scroll--lock-x');
+        }
+      }
+    }, { passive: true });
+
+    function resetGesture() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      cardsScroll.classList.remove('inherit-cards-scroll--lock-x');
+      setTimeout(function() { gestureState = 'none'; }, 100);
+    }
+
+    cardsScroll.addEventListener('touchend', resetGesture);
+    cardsScroll.addEventListener('touchcancel', resetGesture);
+    window.addEventListener('touchend', function() {
+      cardsScroll.classList.remove('inherit-cards-scroll--lock-x');
+      setTimeout(function() { gestureState = 'none'; }, 100);
+    }, { passive: true });
+
+    // 桌面端鼠标兼容（PC浏览器拖拽/长按）：同样不要求必须点在卡片上
+    cardsScroll.addEventListener('mousedown', function(e) {
+      longPressStartX = e.clientX;
+      longPressStartY = e.clientY;
+      hasMoved = false;
+      longPressTriggered = false;
+      gestureState = 'none';
+      cardsScroll.classList.remove('inherit-cards-scroll--lock-x');
+
+      var card = e.target.closest('.inherit-card');
+      var isOnSeal = !!e.target.closest('.inherit-card__seal');
+      if (card && isOnSeal) {
+        var index = parseInt(card.getAttribute('data-index'), 10);
+        longPressTimer = setTimeout(function() {
+          longPressTriggered = true;
+          showTrivia(MASTERS[index].trivia);
+        }, LONG_PRESS_DURATION);
+      }
+    });
+
+    cardsScroll.addEventListener('mousemove', function(e) {
+      var absDx = Math.abs(e.clientX - longPressStartX);
+      var absDy = Math.abs(e.clientY - longPressStartY);
+      if (absDx > LONGPRESS_CANCEL_THRESHOLD || absDy > LONGPRESS_CANCEL_THRESHOLD) {
+        hasMoved = true;
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      }
+    });
+
+    cardsScroll.addEventListener('mouseup', resetGesture);
+    cardsScroll.addEventListener('mouseleave', resetGesture);
+
+    // 桌面端滚轮/触控板水平滚动支持
+    // 人话讲：笔记本触控板横向双指滑动浏览卡片；竖滑优先放行页面滚动。
+    // 新手易错点：
+    //   - deltaY 是竖向滚动量（上下滚），deltaX 是横向滚动量（左右滚）。
+    //   - 如果竖滑幅度明显大于横滑（1.3倍判定），直接 return 不拦截，让页面正常上下滚。
+    //   - 只有横滑为主时，才把滚动量映射到卡片容器的 scrollLeft，并阻止默认行为。
+    //   验证：鼠标滚轮在卡片区上下滚，页面应正常上下走；触控板横滑，卡片应左右走。
+    cardsScroll.addEventListener('wheel', function(e) {
+      var deltaX = e.deltaX;
+      var deltaY = e.deltaY;
+
+      // 竖滑主导：放行，不拦截页面滚动
+      if (Math.abs(deltaY) > Math.abs(deltaX) * 1.3) {
+        return;
+      }
+
+      // 横滑主导：将滚动量映射到卡片容器横向滚动
+      var scrollDelta = deltaX || deltaY;
+      if (Math.abs(scrollDelta) > 0.5) {
+        cardsScroll.scrollLeft += scrollDelta;
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // 阻止滑动后/长按后的误点击：如果发生过滑动或长按已触发，拦截 click
+    cardsScroll.addEventListener('click', function(e) {
+      if (hasMoved || longPressTriggered) {
+        e.stopPropagation();
+        e.preventDefault();
+        hasMoved = false;
+        longPressTriggered = false;
+        return;
+      }
+    }, true);
+
+    // ===== 【交互层】显示 / 隐藏冷门小故事气泡 =====
+    function showTrivia(text) {
+      triviaBubble.textContent = text;
+      triviaBubble.classList.add('visible');
+      triviaBubble.setAttribute('aria-hidden', 'false');
+      // 3 秒后自动消失
+      setTimeout(function() {
+        hideTrivia();
+      }, 3000);
+    }
+
+    function hideTrivia() {
+      triviaBubble.classList.remove('visible');
+      triviaBubble.setAttribute('aria-hidden', 'true');
+    }
+
+    // ===== 【弹窗层】打开 / 关闭匠人详情弹窗 =====
+    // 在干什么：把匠人数据填进 modal 各元素，加 .inherit-modal--open 显示。
+    function openMasterModal(m) {
+      // 头像：没有公开肖像时直接使用首字占位，有照片时才创建图片请求。
+      modalAvatarWrap.innerHTML = '';
+      if (m.portrait === false) {
+        var placeholder = document.createElement('div');
+        placeholder.className = 'inherit-modal__avatar-placeholder';
+        placeholder.textContent = m.initial;
+        placeholder.setAttribute('aria-label', m.name + '暂无公开肖像');
+        modalAvatarWrap.appendChild(placeholder);
+      } else {
+        var avatarImg = document.createElement('img');
+        avatarImg.className = 'inherit-modal__avatar';
+        avatarImg.src = m.img;
+        avatarImg.alt = m.name;
+        avatarImg.onerror = function() {
+          var placeholder = document.createElement('div');
+          placeholder.className = 'inherit-modal__avatar-placeholder';
+          placeholder.textContent = m.initial;
+          this.replaceWith(placeholder);
+        };
+        modalAvatarWrap.appendChild(avatarImg);
+      }
+
+      modalName.textContent = m.name;
+      modalLevel.textContent = m.levelText;
+      // 根据级别设置对应的标签背景色类
+      modalLevel.className = 'inherit-modal__level';
+      if (m.level === 'national') modalLevel.classList.add('inherit-modal__level--national');
+      else if (m.level === 'provincial') modalLevel.classList.add('inherit-modal__level--provincial');
+      else if (m.level === 'folk') modalLevel.classList.add('inherit-modal__level--folk');
+      modalStory.textContent = m.story;
+      masterModal.classList.add('inherit-modal--open');
+      masterModal.setAttribute('aria-hidden', 'false');
+      modalClose.focus();
+
+      // 弹窗打开时绑 Esc 关闭
+      document.addEventListener('keydown', onEscCloseModal);
+    }
+
+    function closeMasterModal() {
+      masterModal.classList.remove('inherit-modal--open');
+      masterModal.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', onEscCloseModal);
+      if (lastMasterTrigger) lastMasterTrigger.focus();
+    }
+
+    // Esc 键关闭弹窗（命名函数，方便 addEventListener/removeEventListener 配对）
+    function onEscCloseModal(e) {
+      if (e.key === 'Escape') closeMasterModal();
+    }
+
+    // 关闭按钮点击
+    modalClose.addEventListener('click', closeMasterModal);
+
+    // 点遮罩空白处关闭
+    masterModal.addEventListener('click', function(e) {
+      if (e.target === masterModal) closeMasterModal();
+    });
+
+    // ===== 【年轮弹窗 v3 工具函数】 =====
+
+    // 设置弹窗状态：切换 start/carving/manual/finish 四种状态类
+    // 人话讲：所有UI显示/隐藏都靠CSS状态类控制，JS只负责切类名
+    // 新手易错点：必须先移除所有状态类，再添加新的，避免多个类同时存在导致样式冲突
+    function setRingState(state) {
+      ringModal.classList.remove('ring-modal--state-start', 'ring-modal--state-carving', 'ring-modal--state-manual', 'ring-modal--state-finish');
+      ringModal.classList.add('ring-modal--state-' + state);
+    }
+
+    // 显示Toast轻提示：居中显示文字，duration毫秒后自动消失（默认1500ms）
+    function showRingToast(msg, duration) {
+      duration = duration || 1500;
+      ringToast.textContent = msg;
+      ringToast.classList.add('ring-toast--show');
+      setTimeout(function() {
+        ringToast.classList.remove('ring-toast--show');
+      }, duration);
+    }
+
+    // 在木板区生成一粒木屑粒子：(x,y)是SVG viewBox坐标(0-300)
+    // 人话讲：镌刻时在"刻刀位置"生成小木屑，CSS动画控制它飘落消失
+    // 数据从哪来：自动镌刻时从path.getPointAtLength取点，手动镌刻时从触摸坐标转换
+    // 新手易错点：
+    //   - 要把SVG坐标(0-300)转换成木板div的百分比位置
+    //   - 粒子上限MAX_RING_PARTICLES，超出就不生成，避免性能问题
+    //   - --rx/--ry/--rot是CSS自定义属性，动画里var()引用实现随机飘落
+    function spawnRingParticle(svgX, svgY) {
+      if (ringParticleCount >= MAX_RING_PARTICLES) return;
+      var p = document.createElement('div');
+      p.className = 'ring-particle';
+      // SVG坐标(0-300) → 百分比定位（适配任意尺寸木板）
+      var pctX = (svgX / 300) * 100;
+      var pctY = (svgY / 300) * 100;
+      p.style.left = pctX + '%';
+      p.style.top = pctY + '%';
+      // 随机大小 3-7px，长方形模拟木屑
+      var size = 3 + Math.random() * 4;
+      p.style.width = size + 'px';
+      p.style.height = (size + 1 + Math.random() * 2) + 'px';
+      // 随机漂移方向：rx水平漂移(-15~15px)，ry向下漂移(10~30px)，rot旋转角度
+      p.style.setProperty('--rx', ((Math.random() - 0.5) * 30) + 'px');
+      p.style.setProperty('--ry', (10 + Math.random() * 20) + 'px');
+      p.style.setProperty('--rot', ((Math.random() - 0.5) * 90) + 'deg');
+      ringParticles.appendChild(p);
+      ringParticleCount++;
+      // 动画结束后自动移除粒子（1.2s动画+一点缓冲）
+      setTimeout(function() {
+        if (p.parentNode) p.remove();
+        ringParticleCount--;
+      }, 1300);
+    }
+
+    // 在木板中心附近爆发一堆木屑粒子（完成印章弹出时用）
+    function burstRingParticles() {
+      for (var i = 0; i < 12; i++) {
+        var angle = (Math.PI * 2 / 12) * i;
+        var dist = 10 + Math.random() * 30;
+        var cx = 150 + Math.cos(angle) * dist;
+        var cy = 150 + Math.sin(angle) * dist;
+        spawnRingParticle(cx, cy);
+      }
+    }
+
+    // 重置弹窗到初始状态：清空输入、重置轨迹、隐藏印章和点
+    function resetRingModalState() {
+      ringInput.value = '';
+      // 清空3组用户绘制轨迹（金线+阴影）
+      userTracePaths.forEach(function(path) {
+        path.setAttribute('d', '');
+        path.setAttribute('opacity', '0');
+        path.style.transition = '';
+      });
+      userTraceShadows.forEach(function(shadow) {
+        shadow.setAttribute('d', '');
+        shadow.setAttribute('opacity', '0');
+        shadow.style.transition = '';
+      });
+      ringCenterSeal.classList.remove('ring-seal-center--show');
+      ringHint.textContent = '';
+      // 重置鎏金弧线（阴影层+金线层都要重置）
+      ringTracesGold.forEach(function(trace) {
+        trace.setAttribute('opacity', '0');
+        trace.style.opacity = '';
+        trace.style.strokeDashoffset = '';
+        trace.style.transition = '';
+      });
+      ringTracesShadow.forEach(function(trace) {
+        trace.setAttribute('opacity', '0');
+        trace.style.opacity = '';
+        trace.style.strokeDashoffset = '';
+        trace.style.transition = '';
+      });
+      ringDots.forEach(function(dot) {
+        dot.setAttribute('opacity', '0');
+        dot.style.opacity = '';
+        dot.style.transition = '';
+      });
+      // 清空所有粒子
+      ringParticles.innerHTML = '';
+      ringParticleCount = 0;
+      // 取消进行中的动画帧
+      if (ringAnimFrameId) {
+        cancelAnimationFrame(ringAnimFrameId);
+        ringAnimFrameId = null;
+      }
+      btnAutoCarve.disabled = false;
+      isCarving = false;
+      manualDrawing = false;
+      manualPathPoints = [];
+      manualLinesCount = 0;
+      manualAllPaths = [];
+      currentTraceIndex = 0;
+    }
+
+    // ===== 【弹窗层】年轮弹窗 打开 / 关闭 =====
+
+    // 打开弹窗：滑入面板，重置状态，锁定背景滚动
+    function openRingModal() {
+      if (isRingModalOpen) return;
+      isRingModalOpen = true;
+      lastRingTrigger = document.activeElement;
+      wasInFinishState = false;
+      resetRingModalState();
+      setRingState('start');
+      ringModal.classList.add('inherit-ring-modal--open');
+      ringModal.setAttribute('aria-hidden', 'false');
+      // 禁止背景页面滚动
+      document.body.style.overflow = 'hidden';
+      // 绑定Esc键关闭
+      document.addEventListener('keydown', onRingEscClose);
+    }
+
+    // 关闭弹窗：滑出面板，解锁背景滚动
+    // 如果是从完成态关闭，400ms动画结束后触发卡片柔光
+    function closeRingModal() {
+      if (!isRingModalOpen) return;
+      // 检查关闭前是否在完成态
+      wasInFinishState = ringModal.classList.contains('ring-modal--state-finish');
+      isRingModalOpen = false;
+      ringModal.classList.remove('inherit-ring-modal--open');
+      ringModal.setAttribute('aria-hidden', 'true');
+      // 恢复背景页面滚动
+      document.body.style.overflow = '';
+      // 解绑Esc键
+      document.removeEventListener('keydown', onRingEscClose);
+      if (lastRingTrigger && typeof lastRingTrigger.focus === 'function') lastRingTrigger.focus();
+      // 400ms滑出动画结束后重置状态
+      setTimeout(function() {
+        resetRingModalState();
+        setRingState('start');
+        // 如果是完成后关闭，触发匠人卡片柔光联动
+        if (wasInFinishState) {
+          triggerCardGlow();
+        }
+      }, 420);
+    }
+
+    // Esc键关闭弹窗
+    function onRingEscClose(e) {
+      if (e.key === 'Escape' && isRingModalOpen) {
+        closeRingModal();
+      }
+    }
+
+    // ===== 【一键镌刻动画】自动画三条鎏金弧线 =====
+    // 在干什么：依次动画画出三条弧线，每条600ms，用stroke-dashoffset实现"画线"效果
+    // 数据从哪来：三条path的d属性写死在SVG里，getTotalLength()获取路径长度
+    // 数据去哪：动画期间stroke-dashoffset从总长度变到0（线从无到有），同时生成木屑粒子
+    function startAutoCarve() {
+      if (isCarving) return;
+      isCarving = true;
+      setRingState('carving');
+      btnAutoCarve.disabled = true;
+      ringHint.textContent = '正在镌刻...';
+
+      // 递归动画第index条弧线（0→1→2）
+      function animateTrace(index) {
+        // 三条都画完了 → 弹出守心印章 → 完成态
+        if (index >= 3) {
+          setTimeout(function() {
+            ringCenterSeal.classList.add('ring-seal-center--show');
+            burstRingParticles();
+            setTimeout(function() {
+              finishCarving();
+            }, 800);
+          }, 300);
+          return;
+        }
+
+        var traceGold = ringTracesGold[index];
+        var traceShadow = ringTracesShadow[index];
+        var dot = ringDots[index];
+
+        // 先亮起点白点
+        dot.style.opacity = '1';
+        dot.setAttribute('opacity', '1');
+        // 显示弧线（阴影层和金线层都显示）
+        traceGold.style.opacity = '1';
+        traceGold.setAttribute('opacity', '1');
+        traceShadow.style.opacity = '1';
+        traceShadow.setAttribute('opacity', '1');
+
+        // 获取路径实际总长度（以金线为准，阴影层路径一样长度相同）
+        var totalLen = traceGold.getTotalLength ? traceGold.getTotalLength() : 80;
+        traceGold.style.strokeDasharray = totalLen;
+        traceGold.style.strokeDashoffset = totalLen;
+        traceShadow.style.strokeDasharray = totalLen;
+        traceShadow.style.strokeDashoffset = totalLen;
+
+        var startTime = null;
+        var duration = 600;
+        var lastParticleTime = 0;
+
+        // 用requestAnimationFrame逐帧动画
+        function animateStep(ts) {
+          if (!startTime) startTime = ts;
+          var elapsed = ts - startTime;
+          var progress = Math.min(elapsed / duration, 1);
+          // 当前dashoffset：从totalLen线性变到0（两层同步动画）
+          var curOffset = totalLen * (1 - progress);
+          traceGold.style.strokeDashoffset = curOffset;
+          traceShadow.style.strokeDashoffset = curOffset;
+
+          // 每隔约50ms在笔尖位置生成木屑粒子（用金线层获取笔尖坐标）
+          if (ts - lastParticleTime > 50 && progress < 1) {
+            var point = traceGold.getPointAtLength(progress * totalLen);
+            spawnRingParticle(point.x, point.y);
+            lastParticleTime = ts;
+          }
+
+          if (progress < 1) {
+            ringAnimFrameId = requestAnimationFrame(animateStep);
+          } else {
+            // 本条线画完，递归画下一条
+            ringAnimFrameId = null;
+            animateTrace(index + 1);
+          }
+        }
+        ringAnimFrameId = requestAnimationFrame(animateStep);
+      }
+
+      // 从第一条开始画
+      animateTrace(0);
+    }
+
+    // 镌刻完成：切换到finish状态，更新结果文案（如果用户输入了文字就插入到文案中间）
+    function finishCarving() {
+      isCarving = false;
+      btnAutoCarve.disabled = false;
+      ringHint.textContent = '';
+      setRingState('finish');
+      // 发光描边+端点白点淡出，留下木板原有的刻痕
+      // 人话讲：先设置transition（下一帧生效），再设opacity触发动画；直接同帧设置会被浏览器合并导致无动画
+      // 新手易错：setAttribute和style.transition在同一帧执行时，浏览器可能跳过过渡，需要用requestAnimationFrame分隔
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          ringTracesGold.forEach(function(trace) {
+            trace.style.transition = 'opacity 0.8s ease';
+            trace.style.opacity = '0';
+          });
+          ringTracesShadow.forEach(function(trace) {
+            trace.style.transition = 'opacity 0.8s ease';
+            trace.style.opacity = '0';
+          });
+          ringDots.forEach(function(dot) {
+            dot.style.transition = 'opacity 0.8s ease';
+            dot.style.opacity = '0';
+          });
+          // 用户亲手画的3条线保留显示，不淡出！让用户能看到自己的作品
+        });
+      });
+      // 如果用户输入了文字，把它插入到结果文案中
+      var userText = ringInput.value.trim();
+      if (userText) {
+        ringResult.innerHTML = '你刻下了自己的坚持<br>'
+          + '<span style="color:#9c2424;font-weight:700;display:inline-block;margin:3px 0;">「' + escapeHtml(userText) + '」</span><br>'
+          + '以刀刻木，以心守艺；<br>长久坚持，皆被看见。';
+      } else {
+        ringResult.innerHTML = '以刀刻木，以心守艺；<br>岁月奔赴所爱，<br>长久坚持，皆被看见。';
+      }
+    }
+
+    // ===== 【手动顺纹雕刻】手指沿木板滑动画线 =====
+    // 在干什么：切换到manual状态，用户手指在SVG上滑动时动态绘制path
+    // 新手易错点：
+    //   - 必须把clientX/clientY屏幕坐标转换成SVG viewBox坐标(0-300)
+    //   - 转换公式：svgX = (clientX - rect.left) * (300 / rect.width)
+    //   - touch-action:none已在CSS设置，防止滑动时页面被拖动
+    //   - 需要画3条线才完成，每条线存在自己的path里，不会被覆盖
+    function startManualCarve() {
+      if (isCarving) return;
+      setRingState('manual');
+      ringHint.textContent = '沿年轮纹路，刻下第一条线';
+      manualPathPoints = [];
+      manualDrawing = false;
+      manualLinesCount = 0;
+      manualAllPaths = [];
+      currentTraceIndex = 0;
+      // 清空所有3组用户轨迹，只激活第1组
+      userTracePaths.forEach(function(path, i) {
+        path.setAttribute('d', '');
+        path.setAttribute('opacity', i === 0 ? '1' : '0');
+        path.style.opacity = i === 0 ? '1' : '0';
+      });
+      userTraceShadows.forEach(function(shadow, i) {
+        shadow.setAttribute('d', '');
+        shadow.setAttribute('opacity', i === 0 ? '1' : '0');
+        shadow.style.opacity = i === 0 ? '1' : '0';
+      });
+      // 白点亮起作为引导点
+      ringDots.forEach(function(dot) {
+        dot.style.opacity = '0.7';
+        dot.setAttribute('opacity', '0.7');
+      });
+      // 引导弧线半透明显示（阴影层和金线层都要显示）
+      ringTracesGold.forEach(function(trace) {
+        trace.style.opacity = '0.3';
+        trace.setAttribute('opacity', '0.3');
+      });
+      ringTracesShadow.forEach(function(trace) {
+        trace.style.opacity = '0.3';
+        trace.setAttribute('opacity', '0.3');
+      });
+    }
+
+    // 坐标转换：屏幕坐标 → SVG viewBox坐标(0-300)
+    // 人话讲：因为内层wrapper有scale(1.55)放大裁切白边，点击位置要除以1.55还原缩放，再映射到SVG的0-300坐标系
+    // 新手易错：直接用board容器坐标除以宽度是错的，因为中间隔了一层scale变换，中心对齐的缩放要从中心点反向计算
+    function getSvgCoord(clientX, clientY) {
+      var rect = ringBoard.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var vdx = clientX - cx;
+      var vdy = clientY - cy;
+      var pdx = vdx / 1.55;
+      var pdy = vdy / 1.55;
+      var scale = 300 / rect.width;
+      return {
+        x: 150 + pdx * scale,
+        y: 150 + pdy * scale
+      };
+    }
+
+    // 手指/鼠标按下：开始画线
+    function onManualStart(e) {
+      if (!ringModal.classList.contains('ring-modal--state-manual')) return;
+      if (manualLinesCount >= 3) return; // 三条都画完了就不画了
+      e.preventDefault();
+      manualDrawing = true;
+      var clientX, clientY;
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      var pt = getSvgCoord(clientX, clientY);
+      manualPathPoints = [pt];
+      // 开始新路径：M移动到起始点（金线和阴影层都要设置），使用当前活动的第N组path
+      var curPath = userTracePaths[currentTraceIndex];
+      var curShadow = userTraceShadows[currentTraceIndex];
+      var startD = 'M ' + pt.x + ',' + pt.y;
+      curPath.setAttribute('d', startD);
+      curShadow.setAttribute('d', startD);
+      spawnRingParticle(pt.x, pt.y);
+    }
+
+    // 手指/鼠标移动：继续画线
+    function onManualMove(e) {
+      if (!manualDrawing) return;
+      e.preventDefault();
+      var clientX, clientY;
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      var pt = getSvgCoord(clientX, clientY);
+      manualPathPoints.push(pt);
+      // 追加L线段到新点（金线和阴影层同步追加），使用当前活动的第N组path
+      var curPath = userTracePaths[currentTraceIndex];
+      var curShadow = userTraceShadows[currentTraceIndex];
+      var newD = curPath.getAttribute('d') + ' L ' + pt.x + ',' + pt.y;
+      curPath.setAttribute('d', newD);
+      curShadow.setAttribute('d', newD);
+      // 偶尔生成木屑（每3个点生成1粒，避免太多粒子）
+      if (manualPathPoints.length % 3 === 0) {
+        spawnRingParticle(pt.x, pt.y);
+      }
+    }
+
+    // 手指/鼠标抬起：结束画线，判断长度是否达标，处理三条线计数
+    // 在干什么：
+    //   1) 计算当前这条线长度，<60px 算太短，清空当前线重画（不计数）
+    //   2) 够长就保存这条线到 manualAllPaths，计数+1
+    //   3) 如果还没到3条：切换到下一个空path，提示继续画
+    //   4) 如果到3条了：完成，弹印章，进结果页
+    // 新手易错点：画完一条后要"固定"当前path，下一条用新path，不然会覆盖
+    function onManualEnd(e) {
+      if (!manualDrawing) return;
+      manualDrawing = false;
+      // 计算路径总长度（相邻点距离之和）
+      var totalDist = 0;
+      for (var i = 1; i < manualPathPoints.length; i++) {
+        var dx = manualPathPoints[i].x - manualPathPoints[i-1].x;
+        var dy = manualPathPoints[i].y - manualPathPoints[i-1].y;
+        totalDist += Math.sqrt(dx*dx + dy*dy);
+      }
+      // 画够60px（SVG坐标系）才算有效线条
+      if (totalDist > 60) {
+        // 保存当前这条线的点
+        manualAllPaths.push(manualPathPoints.slice());
+        manualLinesCount++;
+        // 还没画够3条，准备下一条
+        if (manualLinesCount < 3) {
+          // 切换到下一个path
+          currentTraceIndex = manualLinesCount;
+          // 激活下一组path
+          userTracePaths[currentTraceIndex].setAttribute('opacity', '1');
+          userTracePaths[currentTraceIndex].style.opacity = '1';
+          userTraceShadows[currentTraceIndex].setAttribute('opacity', '1');
+          userTraceShadows[currentTraceIndex].style.opacity = '1';
+          // 清空当前线点集，准备画新的
+          manualPathPoints = [];
+          // 提示进度
+          if (manualLinesCount === 1) {
+            ringHint.textContent = '第一条刻好了，继续刻第二条';
+          } else if (manualLinesCount === 2) {
+            ringHint.textContent = '第二条刻好了，还差最后一条';
+          }
+        } else {
+          // 3条都画完了！镌刻完成
+          ringHint.textContent = '镌刻完成';
+          setTimeout(function() {
+            ringCenterSeal.classList.add('ring-seal-center--show');
+            burstRingParticles();
+            // 隐藏引导线（阴影层和金线层都隐藏）
+            ringTracesGold.forEach(function(trace) {
+              trace.style.opacity = '0';
+              trace.setAttribute('opacity', '0');
+            });
+            ringTracesShadow.forEach(function(trace) {
+              trace.style.opacity = '0';
+              trace.setAttribute('opacity', '0');
+            });
+            ringDots.forEach(function(dot) {
+              dot.style.opacity = '0';
+              dot.setAttribute('opacity', '0');
+            });
+            setTimeout(function() {
+              finishCarving();
+            }, 600);
+          }, 400);
+        }
+      } else {
+        // 画太短了，提示重画，只清空当前这条线，计数不变
+        showRingToast('再刻几笔吧');
+        setTimeout(function() {
+          if (ringModal.classList.contains('ring-modal--state-manual') && manualLinesCount < 3) {
+            var curPath = userTracePaths[currentTraceIndex];
+            var curShadow = userTraceShadows[currentTraceIndex];
+            curPath.setAttribute('d', '');
+            curShadow.setAttribute('d', '');
+            manualPathPoints = [];
+          }
+        }, 800);
+      }
+    }
+
+    // ===== 【保存时光木卷】生成图片并保存 =====
+    // 人话讲：理想情况用html2canvas截图，但这里没引入库，所以用简化方案：
+    //   1) 尝试用Canvas绘制木板+弧线+印章+文字
+    //   2) 如果CORS跨域导致图片无法绘制（跨域图片污染canvas），就降级显示保存提示层
+    //   3) 微信浏览器不支持JS下载，直接弹提示层让用户长按保存
+    function saveRingImage() {
+      var isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+      var canvas = document.createElement('canvas');
+      var ctx = canvas.getContext('2d');
+      canvas.width = 600;
+      canvas.height = 800;
+
+      // 先画深色背景
+      ctx.fillStyle = '#1a1209';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 尝试加载木板图片绘制
+      var woodImg = new Image();
+      woodImg.crossOrigin = 'anonymous';
+      woodImg.onload = function() {
+        try {
+          // 绘制木板到canvas（居中300x300区域）
+          var boardSize = 400;
+          var boardX = (canvas.width - boardSize) / 2;
+          var boardY = 120;
+          ctx.drawImage(woodImg, boardX, boardY, boardSize, boardSize);
+
+          // 绘制鎏金弧线：判断是一键镌刻（预设三条弧线）还是手动镌刻（用户画的真实痕迹）
+          // 人话讲：manualAllPaths长度为3说明是用户亲手画的，就画用户的线；否则画标准预设弧线
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          var scale = boardSize / 300;
+          var isManualMode = manualAllPaths && manualAllPaths.length === 3;
+
+          // 第一层：深棕色阴影（粗线，模拟刻槽凹槽）
+          ctx.strokeStyle = '#2a1505';
+          ctx.lineWidth = 5;
+          if (isManualMode) {
+            // 手动模式：绘制用户画的折线
+            manualAllPaths.forEach(function(points) {
+              if (points.length < 2) return;
+              ctx.beginPath();
+              ctx.moveTo(boardX + points[0].x * scale, boardY + points[0].y * scale);
+              for (var pi = 1; pi < points.length; pi++) {
+                ctx.lineTo(boardX + points[pi].x * scale, boardY + points[pi].y * scale);
+              }
+              ctx.stroke();
+            });
+          } else {
+            // 一键镌刻模式：预设三条标准贝塞尔弧线
+            var autoTraces = [
+              [[210,95], [180,140], [150,150]],
+              [[85,190], [120,170], [150,150]],
+              [[230,225], [190,180], [150,150]]
+            ];
+            autoTraces.forEach(function(trace) {
+              ctx.beginPath();
+              ctx.moveTo(boardX + trace[0][0]*scale, boardY + trace[0][1]*scale);
+              ctx.quadraticCurveTo(
+                boardX + trace[1][0]*scale, boardY + trace[1][1]*scale,
+                boardX + trace[2][0]*scale, boardY + trace[2][1]*scale
+              );
+              ctx.stroke();
+            });
+          }
+
+          // 第二层：亮金色主线（略细，在阴影上面）
+          ctx.strokeStyle = '#e8c968';
+          ctx.lineWidth = 3.2;
+          if (isManualMode) {
+            // 手动模式：绘制用户画的折线（金线）
+            manualAllPaths.forEach(function(points) {
+              if (points.length < 2) return;
+              ctx.beginPath();
+              ctx.moveTo(boardX + points[0].x * scale, boardY + points[0].y * scale);
+              for (var pi = 1; pi < points.length; pi++) {
+                ctx.lineTo(boardX + points[pi].x * scale, boardY + points[pi].y * scale);
+              }
+              ctx.stroke();
+            });
+          } else {
+            // 一键镌刻模式：预设三条标准贝塞尔弧线
+            var autoTracesGold = [
+              [[210,95], [180,140], [150,150]],
+              [[85,190], [120,170], [150,150]],
+              [[230,225], [190,180], [150,150]]
+            ];
+            autoTracesGold.forEach(function(trace) {
+              ctx.beginPath();
+              ctx.moveTo(boardX + trace[0][0]*scale, boardY + trace[0][1]*scale);
+              ctx.quadraticCurveTo(
+                boardX + trace[1][0]*scale, boardY + trace[1][1]*scale,
+                boardX + trace[2][0]*scale, boardY + trace[2][1]*scale
+              );
+              ctx.stroke();
+            });
+          }
+
+          // 绘制中心守心印章（红色竖排）
+          var sealW = 64, sealH = 76;
+          var sealX = boardX + 150*scale - sealW/2;
+          var sealY = boardY + 150*scale - sealH/2;
+          ctx.fillStyle = '#9c2424';
+          ctx.fillRect(sealX, sealY, sealW, sealH);
+          ctx.fillStyle = '#f8f5ed';
+          ctx.font = 'bold 28px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('守', sealX + sealW/2, sealY + sealH*0.3);
+          ctx.fillText('心', sealX + sealW/2, sealY + sealH*0.7);
+
+          // 绘制标题
+          ctx.fillStyle = '#c8a466';
+          ctx.font = 'bold 36px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('刻下我的坚持', canvas.width/2, 70);
+
+          // 绘制用户文字或默认文案
+          var userText = ringInput.value.trim();
+          ctx.fillStyle = '#f8f5ed';
+          ctx.font = '18px serif';
+          var textY = boardY + boardSize + 50;
+          if (userText) {
+            ctx.fillStyle = '#c8a466';
+            ctx.font = 'bold 22px serif';
+            ctx.fillText('「' + userText + '」', canvas.width/2, textY);
+            textY += 40;
+            ctx.fillStyle = 'rgba(248,245,237,0.85)';
+            ctx.font = '16px serif';
+          }
+          ctx.fillText('潮州木雕匠人以刀刻木，耗费半生守望一门手艺', canvas.width/2, textY);
+          ctx.fillText('你以岁月奔赴心中所爱', canvas.width/2, textY + 28);
+          ctx.fillText('所有长久的坚持，皆值得被看见', canvas.width/2, textY + 56);
+
+          // 转换为图片URL
+          var dataUrl = canvas.toDataURL('image/png');
+          if (isWeChat) {
+            // 微信：显示提示层让用户长按保存
+            ringSaveImg.src = dataUrl;
+            ringSaveOverlay.classList.add('ring-save-overlay--show');
+            ringSaveOverlay.setAttribute('aria-hidden', 'false');
+          } else {
+            // 非微信：尝试触发下载
+            var link = document.createElement('a');
+            link.download = '时光木卷.png';
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showRingToast('图片已保存');
+          }
+        } catch(e) {
+          // Canvas被跨域图片污染等错误 → 降级提示
+          console.warn('Canvas save failed, falling back to overlay:', e);
+          showSaveFallback();
+        }
+      };
+      woodImg.onerror = function() {
+        // 图片加载失败 → 降级提示
+        showSaveFallback();
+      };
+      woodImg.src = 'assets/images/inherit/wood_ring_base_clean.jpg';
+
+      // 如果是微信，不用等canvas，直接弹提示层（微信保存必须用户长按）
+      if (isWeChat) {
+        // 微信直接弹提示，尝试加载木板图作为预览
+        setTimeout(function() {
+          if (!ringSaveImg.src || ringSaveImg.src.indexOf('data:') === -1) {
+            ringSaveImg.src = 'assets/images/inherit/wood_ring_base_clean.jpg';
+          }
+          ringSaveOverlay.classList.add('ring-save-overlay--show');
+          ringSaveOverlay.setAttribute('aria-hidden', 'false');
+        }, 300);
+      }
+    }
+
+    // 保存降级方案：显示提示层，告诉用户截图/右键保存
+    function showSaveFallback() {
+      ringSaveImg.src = 'assets/images/inherit/wood_ring_base_clean.jpg';
+      ringSaveOverlay.classList.add('ring-save-overlay--show');
+      ringSaveOverlay.setAttribute('aria-hidden', 'false');
+      showRingToast('请截图保存您的时光木卷');
+    }
+
+    // 关闭保存提示层
+    function closeSaveOverlay() {
+      ringSaveOverlay.classList.remove('ring-save-overlay--show');
+      ringSaveOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    // ===== 【复制分享文案】=====
+    function copyShareText() {
+      var userText = ringInput.value.trim() || '日复一日的热爱';
+      var text = '在潮州木雕传承页，我刻下了属于自己的坚持：「' + userText + '」。匠人以刀刻木，以心守艺；你以岁月奔赴所爱，所有长久的坚持，皆值得被看见。';
+      // 优先用现代Clipboard API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+          showRingToast('文案已复制');
+        }).catch(function() {
+          // Clipboard API失败，用旧方法兜底
+          copyTextFallback(text);
+        });
+      } else {
+        copyTextFallback(text);
+      }
+    }
+
+    // 旧版复制兜底：创建临时textarea，选中，execCommand('copy')
+    function copyTextFallback(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showRingToast('文案已复制');
+      } catch(e) {
+        showRingToast('复制失败，请手动复制');
+      }
+      document.body.removeChild(ta);
+    }
+
+    // ===== 【事件绑定】年轮弹窗所有按钮和交互 =====
+    ringClose.addEventListener('click', closeRingModal);
+    ringOverlay.addEventListener('click', closeRingModal);
+    btnAutoCarve.addEventListener('click', startAutoCarve);
+    btnManualCarve.addEventListener('click', startManualCarve);
+    btnSaveImage.addEventListener('click', saveRingImage);
+    btnCopyText.addEventListener('click', copyShareText);
+    btnBackToPage.addEventListener('click', closeRingModal);
+    btnCloseSave.addEventListener('click', closeSaveOverlay);
+
+    // 手动镌刻：SVG层触摸/鼠标事件
+    // 人话讲：监听SVG上的触摸和鼠标事件，实现手指/鼠标拖拽画线
+    ringSvg.addEventListener('touchstart', onManualStart, { passive: false });
+    ringSvg.addEventListener('touchmove', onManualMove, { passive: false });
+    ringSvg.addEventListener('touchend', onManualEnd);
+    ringSvg.addEventListener('touchcancel', onManualEnd);
+    ringSvg.addEventListener('mousedown', onManualStart);
+    // mousemove/mouseup绑在document上，防止鼠标划出SVG时丢失事件
+    document.addEventListener('mousemove', onManualMove);
+    document.addEventListener('mouseup', onManualEnd);
+
+    // ===== 【联动动画】卡片依次柔光亮起 =====
+    // 在干什么：年轮弹窗关闭后，4 张卡片依次（间隔 0.3s）播放柔光动画。
+    // animation-delay 递增实现"依次亮起"效果。
+    function triggerCardGlow() {
+      var cards = cardsScroll.querySelectorAll('.inherit-card');
+      cards.forEach(function(card, i) {
+        // 先移除旧动画类（如果有的话），强制重排后重新添加
+        card.classList.remove('inherit-card--glow');
+        // 强制重排：让浏览器"看到"类被移除，再添加才能重新触发动画
+        void card.offsetWidth;
+        card.style.animationDelay = (i * 0.3) + 's';
+        card.classList.add('inherit-card--glow');
+      });
+      // 动画结束后清理（最长一张卡片 delay=0.9s + 动画 2s = 2.9s）
+      setTimeout(function() {
+        cards.forEach(function(card) {
+          card.classList.remove('inherit-card--glow');
+          card.style.animationDelay = '';
+        });
+      }, 3500);
+    }
+
+    // ===== 【按钮交互】底部双按钮 =====
+    // "匠语漫行" → 打开匠语漫行全屏模态（逻辑在文件末尾定义）
+
+    // "刻下我的坚持" → 打开年轮弹窗
+    btnMyPersistence.addEventListener('click', function() {
+      openRingModal();
+    });
+
+    // ===== 【明暗模式】月亮按钮切换 =====
+    // 在干什么：点击切换 .dark 类，CSS 变量自动换色。
+    darkModeBtn.addEventListener('click', function() {
+      isDarkMode = !isDarkMode;
+      page.classList.toggle('dark', isDarkMode);
+      document.body.classList.toggle('dark', isDarkMode);
+    });
+
+    // ===== 【视差滚动更新】 =====
+    function updateParallax() {
+      var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+      var offset = scrollY * 0.4;
+      if (parallaxOverlay) {
+        parallaxOverlay.style.transform = 'translateY(' + offset + 'px)';
+      }
+
+      var delta = Math.abs(scrollY - lastScrollY);
+      lastScrollY = scrollY;
+      particleSpawnAccumulator += delta;
+      while (particleSpawnAccumulator > 30) {
+        spawnParticle();
+        particleSpawnAccumulator -= 30;
+      }
+
+      parallaxTicking = false;
+    }
+
+    window.addEventListener('scroll', function() {
+      if (!parallaxTicking) {
+        requestAnimationFrame(updateParallax);
+        parallaxTicking = true;
+      }
+    }, { passive: true });
+
+    // ===== 【木屑粒子特效】 =====
+    function spawnParticle() {
+      if (particleCount >= MAX_PARTICLES) return;
+      var p = document.createElement('div');
+      p.className = 'inherit-particle';
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.top = '-10px';
+      var size = 2 + Math.random() * 3;
+      p.style.width = size + 'px';
+      p.style.height = (size + 1 + Math.random() * 2) + 'px';
+      var drift = (Math.random() - 0.5) * 60;
+      p.style.setProperty('--drift', drift + 'px');
+      p.style.animationDuration = (4 + Math.random() * 3) + 's';
+      var alpha = 0.1 + Math.random() * 0.1;
+      p.style.background = 'rgba(180, 140, 90, ' + alpha + ')';
+      particlesContainer.appendChild(p);
+      particleCount++;
+      setTimeout(function() {
+        if (p.parentNode) p.remove();
+        particleCount--;
+      }, 7000);
+    }
+
+    // 页面初始加载时生成几粒粒子
+    for (var i = 0; i < 5; i++) {
+      setTimeout(spawnParticle, i * 400);
+    }
+
+    // ===== 【初始化】 =====
+    renderCards();
+
+    // ===== 匠语漫行模态逻辑 =====
+    // 匠人语录集（来自语录集.txt）
+    // 人话讲：匠人们的心里话和从艺感悟，会在飘字区域从右往左慢慢飘过
+    var JIANGYU_QUOTES = [
+      '镂木求活，蟹篓为功',
+      '刀不离手，手不离木，三年入门，十年成家',
+      '杂杂、匀匀、通通',
+      '细而不腻、大而不空、繁而不乱、艳而不俗',
+      '刀是手的延伸，手是心的延伸。心到，刀才能到',
+      '除了你认认真真地从艺，还要胸怀宽广，对事不对人',
+      '木雕技艺最大的困难就是耐心，从业者要有坚持的精神',
+      '做木雕太辛苦了，托雕刀的手掌上有一块很大的茧',
+      '不管这手艺多苦多累都不能放弃，这是文化，是祖宗传下来的瑰宝',
+      '木雕一开始最关键就是挑选材料',
+      '木雕的制作要达到以后的文物水平',
+      '多层次镂空是潮州木雕最大的特点',
+      '完成一件作品最难的是什么？绝对是创意',
+      '如果滥竽充数，那等于工艺的垃圾',
+      '我不认为自己现在已经是成功了，真正的成功还需留待后世人去评判',
+      '吃亏是肯定的，但为了让这门手艺能够完整地传承下去，值！',
+      '一般年轻人知道要学两三年才能出师，都不愿意干了',
+      '完全用工具代替手工，也是舍本求末',
+      '最好的石雕在欧洲，最好的木雕在中国',
+      '传统工艺一定要改革，一定要有创造性',
+      '唯有潮州木雕艺人，创造了熔雕刻与绘画于一炉的木雕镂通雕技艺',
+      '匠心就是甘于寂寞',
+      '我一辈子都学不完',
+      '老老实实地去做，用身体用时间去做，来不得一点虚假',
+      '如切如磋，如琢如磨',
+      '只要有恒心、有耐心、热爱木雕，我都愿意倾囊相授',
+      '磨刀，磨的不仅仅是器，更是磨炼耐心',
+      '我把自己叫作木头人，因为我这一生都在跟木头打交道',
+      '手艺活从来都是谁做得好，谁就是标准',
+      '艺术不能死守，只有不断创新才能赋予木雕新的生命',
+      '放低姿态才能飞得更高',
+      '木雕入门先磨刀，学会磨刀刀会利才能做好工作',
+      '我是一个用木头讲故事的非遗传承人',
+      '传承是一种责任！',
+      '荣誉即责任，非遗技艺的传承需要自己勇于担当',
+      '器物是有魂魄的，可以穿越时光与人相遇',
+      '想要做好一件作品，必须要有三心：静心、耐心、细心',
+      '一项非遗若想很好地传承，首先要让它被看见',
+      '我希望潮州木雕能离生活更近些',
+      '祖孙三代，一把刀；人民大会堂，三代人的考场',
+      '做木雕的过程非常打磨心性，磨炼的是一颗耐得住寂寞的心',
+      '篓子里的东西最难雕刻，只能一点一点雕琢',
+      '斧凿刀刻，一雕一琢，让古建筑在手中重获新生'
+    ];
+
+    // 祝福语集（来自祝福语.txt）
+    // 人话讲：点击光球后随机显示一句温暖的祝福语给用户
+    var JIANGYU_BLESSINGS = [
+      '岁月漫漫长途，所有默默耕耘都不会被时光辜负，风浪当作历练，静待繁花盛开，所有期许终会落地生根。',
+      '不必急于奔赴终点，慢慢走好脚下路途，在沉淀中积蓄力量，终会穿过迷雾，遇见辽阔明朗的远方。',
+      '生活总有起落浮沉，守住心底不变的热忱，与遗憾和解，向前路前行，光亮总会自四面八方奔赴而来。',
+      '把细碎的努力交给时间，不惧暂时的沉寂，凡是坚持奔赴的方向，终会迎来风和日丽，万事渐入佳境。',
+      '沿途风雨皆是馈赠，坎坷铺成前行道路，保持从容平和的心境，长久坚持，自能抵达心之所向。',
+      '于平凡日常里坚守热爱，不困于眼前困顿，不忧于未知前路，时光缓缓，所有美好正在缓缓酝酿。',
+      '驱散心底的迷茫与焦虑，稳步向前，沿途会遇见温柔晚风、烂漫光景，想要的生活终将如约而至。',
+      '心怀山海，眼有星光，接纳世事无常，依旧勇敢出发，漫长跋涉之后，自有广阔天地等候相逢。',
+      '凡是走过的道路皆有意义，所有熬过的艰难都会化作底气，往后路途平顺，处处遇见不期而遇的惊喜。',
+      '不必追随旁人的脚步，安心遵循自身节奏生长，静待时机成熟，自有独属于自己的风景与荣光。',
+      '阴霾终会随风散去，暖意缓缓漫入生活，保持乐观与坚定，所有等待，都会换来称心如意的答案。',
+      '以温柔对抗世间纷扰，以坚韧面对重重挑战，持续向上生长，往后四季安稳，好事源源不断。',
+      '漫长征途里，稳住心神，持续深耕，暂时的失意只是短暂停留，曙光常在前方，万事皆有转机。',
+      '收集日常里细碎的美好，消解生活带来的疲惫，怀揣希望一路向前，前路开阔，万事皆可期待。',
+      '心有笃定，不惧路远，纵使前路蜿蜒曲折，只要步履不停，终能跨过重重阻碍，奔赴理想彼岸。',
+      '世间所有璀璨，都源自长久默默的坚守，沉下心默默蓄力，待到风起之时，便可扬帆远航。',
+      '和过往的困顿挥手作别，带着勇气奔赴下一程山海，往后日子清净无忧，所愿之事慢慢成真。',
+      '四季流转，风物常新，守住内心的纯粹与赤诚，在日复一日的坚持中，慢慢活成理想中的模样。',
+      '纵使前路偶有荆棘，亦不要停下前行脚步，风雨洗礼过后，眼界更加开阔，前路满目春光。',
+      '时光自有安排，不必焦虑得失，认真做好当下每件小事，长久积累之下，惊喜会如期奔赴而来。',
+      '褪去浮躁，静守本心，在喧嚣人间寻得安宁，持续奔赴热爱，漫漫余生，常有喜乐相伴左右。',
+      '所有蛰伏的时光都在积蓄力量，熬过漫长沉寂，终会冲破层层阻隔，迎来属于自己的万丈光芒。',
+      '拥抱生活所有不完美，保持永远向前的信念，穿越重重人海，终会遇见温柔与无限可能。',
+      '晚风捎来好运，前路铺满星光，所有付出皆有回响，往后路途顺遂无忧，处处皆是温柔光景。',
+      '以热爱抵御岁月荒芜，以坚持跨越万般难关，征途漫漫，终有一日，能够抵达心中向往的远方。',
+      '暂时的困境只是旅途插曲，心怀希望静静等候，云雾散尽之时，万里晴空便会展露眼前。',
+      '在烟火人间慢慢修行，不慌不忙稳步前行，积攒温柔与力量，往后岁岁平安，事事顺心如愿。',
+      '长路漫漫，自有清风相伴，保持永不褪色的热忱，跨越山海之后，理想与美好终将双向奔赴。',
+      '放下无谓内耗，专注自身成长，时光不会亏待每一份努力，未来处处藏着崭新的机遇与欢喜。',
+      '历经世事百态，依旧心存善意与向往，踏过山河万里，终会寻得安稳归宿，收获满心欢喜。',
+      '前路自有清风引路，所有迷茫终会消散，持续向上奔赴，在不远的将来，邂逅期盼已久的风景。',
+      '把遗憾留在昨日，带着期待奔赴来日，生活慢慢升温，好运接踵而至，一切都在向好发展。',
+      '静候时机，潜心沉淀，不必羡慕他人花期，每个人都有专属节奏，终会绽放独有的光彩。',
+      '山水迢迢，初心不改，不惧路途遥远与艰难，坚持一路向前，终能拨开云雾，看见万里晨光。',
+      '寻常岁月亦可滋生浪漫，守住心中光亮，从容应对世事变迁，往后日日安宁，常有好事发生。',
+      '每一次跌倒都是蓄力，每一次坚持都靠近目标，长久奔赴之下，所有遥不可及的梦想慢慢触手可及。',
+      '人间风物温柔，前路自有光亮，卸下心头重担轻装前行，一路收获暖意，与美好频频相逢。',
+      '不惧世事跌宕，常怀从容之心，在漫长岁月里持续成长，终会拥有抵御风雨的底气与力量。',
+      '春风总会抵达旷野，美好终会奔赴人间，耐心等候，持续前行，所有期待都会迎来圆满结局。',
+      '走过曲折小径，方能遇见开阔平川，所有经历皆为馈赠，往后征途坦荡，万事顺遂无忧。'
+    ];
+
+    var jiangyuModal = document.getElementById('jiangyuModal');
+    var jiangyuClose = document.getElementById('jiangyuClose');
+    var jiangyuFloating = document.getElementById('jiangyuFloating');
+    var jiangyuOrb = document.getElementById('jiangyuOrb');
+    var jiangyuBlessing = document.getElementById('jiangyuBlessing');
+    var jiangyuBlessingText = document.getElementById('jiangyuBlessingText');
+    var jiangyuBlessingClose = document.getElementById('jiangyuBlessingClose');
+
+    var jiangyuInterval = null;
+    var jiangyuActiveItems = 0;
+    var JIANGYU_MAX_ITEMS = 6; // 最多6条飘字同时显示（6个轨道）
+    var JIANGYU_MIN_ITEMS = 5; // 最少保持5条飘字
+
+    // 轨道制分布算法：把垂直空间切成6条"轨道"，每条轨道同时只能有1条飘字
+    // 人话讲：就像6条平行的跑道，每条跑道上同时只能跑一个运动员，跑完了才能让下一个上
+    // 新手易错点：轨道范围要避开中央"潮州木雕"区域(30%-56%)，轨道之间留2%以上间距防止重叠
+    // 人话讲：把可用区域分成6个轨道，上区3条（3%-30%），下区3条（56%-90%）
+    var jiangyuTracks = [
+      [3, 10],     // 轨道0：最顶部 3%-10%
+      [12, 20],    // 轨道1：上部 12%-20%
+      [22, 30],    // 轨道2：上部靠下 22%-30%
+      [56, 66],    // 轨道3：下部靠上 56%-66%（跳过中央文字区30%-56%）
+      [68, 78],    // 轨道4：下部 68%-78%
+      [80, 90]     // 轨道5：最底部 80%-90%（给光球留10%空间）
+    ];
+    // 每个轨道是否被占用：false=空闲，true=有飘字正在飞
+    var jiangyuTrackOccupied = [false, false, false, false, false, false];
+
+    // 打开匠语漫行模态
+    // 人话讲：显示模态，禁止页面滚动，开始飘字
+    function openJiangyuModal() {
+      jiangyuModal.classList.add('visible');
+      jiangyuModal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      startFloatingTexts();
+    }
+
+    // 关闭匠语漫行模态
+    // 人话讲：隐藏模态，恢复页面滚动，停止飘字，同时关闭祝福语弹窗
+    function closeJiangyuModal() {
+      jiangyuModal.classList.remove('visible');
+      jiangyuModal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      stopFloatingTexts();
+      jiangyuBlessing.classList.remove('visible');
+      jiangyuBlessing.setAttribute('aria-hidden', 'true');
+    }
+
+    // 开始飘字动画（轨道制版）
+    // 人话讲：打开模态后，循环6个轨道，每个轨道创建一个飘字，间隔600ms错开时间
+    // 新手易错点：必须错开时间创建，否则所有飘字同时从右侧出来会重叠在一起
+    function startFloatingTexts() {
+      jiangyuFloating.innerHTML = '';
+      jiangyuActiveItems = 0;
+      // 重置所有轨道为空闲状态（6个轨道）
+      jiangyuTrackOccupied = [false, false, false, false, false, false];
+      
+      // 循环6个轨道，每个轨道创建一个飘字，间隔600ms
+      for (var i = 0; i < 6; i++) {
+        (function(idx) {
+          setTimeout(function() {
+            createFloatingText();
+          }, idx * 600); // 间隔600ms，更快填满屏幕
+        })(i);
+      }
+      
+      // 定时器：检查是否有空闲轨道，有则创建新飘字
+      jiangyuInterval = setInterval(function() {
+        // 人话讲：遍历轨道数组，找到第一个空闲的轨道就创建飘字
+        var hasFreeTrack = false;
+        for (var i = 0; i < jiangyuTrackOccupied.length; i++) {
+          if (!jiangyuTrackOccupied[i]) {
+            hasFreeTrack = true;
+            break;
+          }
+        }
+        // 有空闲轨道才创建，没有就等动画结束释放轨道
+        if (hasFreeTrack) {
+          createFloatingText();
+        }
+      }, 1500); // 每1.5秒检查一次，补充飘字
+    }
+
+    // 停止飘字
+    // 人话讲：清除定时器，清空飘字区域，重置计数，同时重置所有轨道为空闲状态
+    // 新手易错点：动画结束后一定要移除DOM元素，否则会内存泄漏；还要重置轨道占用状态
+    function stopFloatingTexts() {
+      if (jiangyuInterval) {
+        clearInterval(jiangyuInterval);
+        jiangyuInterval = null;
+      }
+      jiangyuFloating.innerHTML = '';
+      jiangyuActiveItems = 0;
+      // 重置所有轨道为空闲状态，下次打开模态时才能正常创建飘字
+      jiangyuTrackOccupied = [false, false, false, false, false, false];
+    }
+
+    // 创建一条飘字（轨道制版）
+    // 人话讲：先找空闲轨道，选中后在轨道范围内随机top位置，标记占用，创建DOM元素
+    // 新手易错点：必须给DOM元素添加data-track属性记录轨道编号，animationend时才能正确释放
+    function createFloatingText() {
+      // 第一步：找空闲轨道
+      var freeTrackIndex = -1;
+      for (var i = 0; i < jiangyuTrackOccupied.length; i++) {
+        if (!jiangyuTrackOccupied[i]) {
+          freeTrackIndex = i;
+          break;
+        }
+      }
+      // 没有空闲轨道就不创建，等动画结束释放
+      if (freeTrackIndex === -1) return;
+
+      // 第二步：选中轨道后，标记为占用
+      jiangyuTrackOccupied[freeTrackIndex] = true;
+
+      // 第三步：在选中轨道的范围内随机一个top位置（增加自然感）
+      var trackRange = jiangyuTracks[freeTrackIndex];
+      var topPercent = trackRange[0] + Math.random() * (trackRange[1] - trackRange[0]);
+
+      // 第四步：创建DOM元素
+      var text = JIANGYU_QUOTES[Math.floor(Math.random() * JIANGYU_QUOTES.length)];
+      var item = document.createElement('div');
+      item.className = 'jiangyu-floating__item';
+      item.textContent = text;
+      // 关键：给DOM元素添加data-track属性，记录它占用的轨道编号
+      item.setAttribute('data-track', freeTrackIndex);
+
+      item.style.top = topPercent + '%';
+
+      var duration = 25 + Math.random() * 15;
+      item.style.animationDuration = duration + 's';
+
+      // 字体大小调整：从14-18px改为18-23px，让飘字更清晰
+      var fontSize = 18 + Math.floor(Math.random() * 6);
+      item.style.fontSize = fontSize + 'px';
+
+      item.style.opacity = 0;
+
+      jiangyuFloating.appendChild(item);
+      jiangyuActiveItems++;
+
+      // 第五步：动画结束后，释放该轨道
+      item.addEventListener('animationend', function() {
+        if (item.parentNode) {
+          item.parentNode.removeChild(item);
+          jiangyuActiveItems--;
+          // 通过data-track属性找到对应轨道并释放
+          var trackIdx = parseInt(item.getAttribute('data-track'), 10);
+          if (!isNaN(trackIdx) && trackIdx >= 0 && trackIdx < jiangyuTrackOccupied.length) {
+            jiangyuTrackOccupied[trackIdx] = false;
+          }
+        }
+      });
+    }
+
+    // 点击光球：显示随机祝福语
+    jiangyuOrb.addEventListener('click', function() {
+      var blessing = JIANGYU_BLESSINGS[Math.floor(Math.random() * JIANGYU_BLESSINGS.length)];
+      jiangyuBlessingText.textContent = blessing;
+      jiangyuBlessing.classList.add('visible');
+      jiangyuBlessing.setAttribute('aria-hidden', 'false');
+    });
+
+    // 关闭祝福语
+    jiangyuBlessingClose.addEventListener('click', function() {
+      jiangyuBlessing.classList.remove('visible');
+      jiangyuBlessing.setAttribute('aria-hidden', 'true');
+    });
+
+    // 点击遮罩也关闭祝福语
+    jiangyuBlessing.querySelector('.jiangyu-blessing__overlay').addEventListener('click', function() {
+      jiangyuBlessing.classList.remove('visible');
+      jiangyuBlessing.setAttribute('aria-hidden', 'true');
+    });
+
+    // 右上角关闭模态
+    jiangyuClose.addEventListener('click', closeJiangyuModal);
+
+    // 修改按钮点击行为：匠语漫行
+    btnViewMasters.addEventListener('click', openJiangyuModal);
+  </script>
+</body>
+</html>
+

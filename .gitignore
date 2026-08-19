@@ -1,0 +1,57 @@
+# 敏感信息（API密钥、环境变量）
+.env
+.env.local
+.env.*.local
+config.local.js
+*secret*
+*key*.txt
+
+# 依赖和构建
+node_modules/
+dist/
+build/
+.cache/
+.parcel-cache/
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 编辑器和系统
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+*.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# Trae AI 开发过程文件（spec、规划文档等，无需提交到仓库）
+.trae/
+
+# 本地发布副本和上传归档（正式发布目录仅使用 .edgeone-build/）
+.edgeone-static/
+.uploads/
+test_screenshots/
+
+# 内部原始资料体积较大，不随代码仓库上传；线上页面只使用 assets/。
+references/
+
+server/.env
+server/.env.*
