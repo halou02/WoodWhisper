@@ -23,8 +23,8 @@ WoodWhisper/
 │   ├── inherit/               传承页背景、年轮与公开肖像
 │   └── ai/                    数字人形象
 ├── references/history-originals/  历史页原始高分辨率展品资料，不参与线上加载
-├── server/start_server.py     本地 AI 代理服务器，默认端口 8124
-├── scripts/serve-static.mjs   Node 静态预览服务器，默认端口 8125
+├── server/start_server.py     本地 AI 代理服务器，只服务 .edgeone-build，默认端口 8124
+├── scripts/serve-static.mjs   Node 静态预览服务器，只服务 .edgeone-build，默认端口 8125
 └── .edgeone-build/            EdgeOne Pages 发布目录，含 functions/api/chat.js
 ```
 
@@ -52,6 +52,7 @@ WoodWhisper/
 - 本地 AI 联调：`py -3 server/start_server.py`，访问 `http://127.0.0.1:8124`。
 - 仅静态预览：`npm run preview`，访问 `http://127.0.0.1:8125`。静态预览不支持 `/api/chat`。
 - 生产发布目录为 `.edgeone-build`，并必须包含 `functions/api/chat.js`。
+- `.edgeone-build` 只包含网站运行所需的页面、`assets/`、`css/`、`js/` 和 `functions/`；`references/` 与项目文档不进入发布包。
 
 ## 维护准则
 
