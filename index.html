@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  文件名：index.html（根目录首页）
+  是什么：潮州木雕·数智非遗传承 H5 项目的首页（手机扫码入口页）
+  为什么放根目录：用户扫码后访问的是根域名，根目录必须有 index.html
+  技术栈：原生 HTML + CSS + Vanilla JS
+  ============================================================
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <!-- 
+    viewport 配置：
+    width=device-width → 页面宽度跟随手机屏幕宽度
+    initial-scale=1.0 → 初始缩放 100%
+    不设置 maximum-scale/user-scalable → 允许用户按自己的需要放大阅读
+    viewport-fit=cover → 刘海屏适配（页面铺满整个屏幕）
+    新手易错点：viewport-fit=cover 必须加，否则 env(safe-area-inset-*) 不生效
+    验证方法：iPhone X+ 打开，底部导航条应在 home 指示条上方，不重叠
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="潮州木雕数智非遗传承 H5，带你走近潮州木雕的历史脉络、传承匠人和 AI 数字讲解。">
+  <title>潮州木雕·数智非遗传承</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="prefetch" href="history.html">
+  <link rel="prefetch" href="inherit.html">
+  <link rel="prefetch" href="ai.html">
+</head>
+<body>
+  <!--
+    page + page--fade-in：
+    人话讲：整页根容器 + 淡入动画入口。
+    新手易错点：淡入类必须直接写在 HTML 上，不要等 JS 再补，不然四个页面切换手感会不一致。
+    验证方法：手机刷新页面，首页内容应轻微淡入，不应"先白屏再突然跳出"。
+  -->
+  <div class="page page--fade-in">
+
+    <!--
+      顶部标题区：
+      目标是还原参考图"题字 + 花卉暗纹 + 印章"的安静展签感。
+      左右 SVG 只是装饰，所以要加 aria-hidden="true"，避免读屏软件重复朗读。
+    -->
+    <header class="home-header">
+      <span class="home-header__ornament home-header__ornament--left" aria-hidden="true">
+        <svg viewBox="0 0 120 240" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.2">
+          <path d="M92 4C76 18 70 34 72 48c3 22 22 29 20 52-1 17-15 29-33 30-14 0-25-7-32-18" />
+          <path d="M56 18c-8 8-12 18-10 27 3 12 15 16 16 29 1 11-8 18-17 20-7 1-14-2-20-8" opacity="0.8" />
+          <path d="M31 132c9-2 20 3 24 11 5 8 2 18-6 25-11 10-28 12-37 23" />
+          <path d="M80 104c14-4 26 2 30 12 4 10-2 21-14 26-12 5-24 2-30-6" />
+          <path d="M36 52c7-9 18-13 26-9 7 4 8 14 1 23-8 10-21 15-29 11" opacity="0.72" />
+          <path d="M22 188c7-9 18-14 27-11 9 4 12 14 6 24-7 11-22 17-33 14" opacity="0.72" />
+          <path d="M63 156c6-10 17-16 27-13 9 2 13 12 9 22-4 10-16 18-27 18-11 0-16-9-9-27Z" fill="currentColor" opacity="0.16" stroke="none" />
+          <path d="M44 90c5-8 14-13 21-11 7 2 10 9 7 17-5 10-16 16-25 15-9-2-12-8-3-21Z" fill="currentColor" opacity="0.16" stroke="none" />
+        </svg>
+      </span>
+
+      <span class="home-header__ornament home-header__ornament--right" aria-hidden="true">
+        <svg viewBox="0 0 120 240" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.2">
+          <path d="M92 4C76 18 70 34 72 48c3 22 22 29 20 52-1 17-15 29-33 30-14 0-25-7-32-18" />
+          <path d="M56 18c-8 8-12 18-10 27 3 12 15 16 16 29 1 11-8 18-17 20-7 1-14-2-20-8" opacity="0.8" />
+          <path d="M31 132c9-2 20 3 24 11 5 8 2 18-6 25-11 10-28 12-37 23" />
+          <path d="M80 104c14-4 26 2 30 12 4 10-2 21-14 26-12 5-24 2-30-6" />
+          <path d="M36 52c7-9 18-13 26-9 7 4 8 14 1 23-8 10-21 15-29 11" opacity="0.72" />
+          <path d="M22 188c7-9 18-14 27-11 9 4 12 14 6 24-7 11-22 17-33 14" opacity="0.72" />
+          <path d="M63 156c6-10 17-16 27-13 9 2 13 12 9 22-4 10-16 18-27 18-11 0-16-9-9-27Z" fill="currentColor" opacity="0.16" stroke="none" />
+          <path d="M44 90c5-8 14-13 21-11 7 2 10 9 7 17-5 10-16 16-25 15-9-2-12-8-3-21Z" fill="currentColor" opacity="0.16" stroke="none" />
+        </svg>
+      </span>
+
+      <div class="home-header__titles">
+        <h1 class="home-header__title">潮州木雕·数智非遗传承</h1>
+        <p class="home-header__subtitle">千年刀木，数智新生</p>
+      </div>
+
+      <span class="home-header__seal" aria-hidden="true">
+        <svg viewBox="0 0 40 40" width="100%" height="100%">
+          <rect x="2" y="2" width="36" height="36" rx="4" fill="#C43D2B" opacity="0.92"></rect>
+          <rect x="5" y="5" width="30" height="30" rx="2" fill="none" stroke="#D4AF37" stroke-width="1.5" opacity="0.88"></rect>
+          <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" fill="#D4AF37" font-size="16" font-family="serif" font-weight="700">雕</text>
+        </svg>
+      </span>
+    </header>
+
+    <main class="app-main">
+      <!--
+        主视觉卡片：
+        这里不再叠加大段标题文字，只保留图片本身和浮动 AI 按钮，更接近参考稿。
+        新手易错点：AI 按钮要写在 .hero 里面，才能 absolute 浮在主图底部。
+        验证方法：如果按钮跑到主图外面，多半是结构写错或父级没保持 .hero。
+      -->
+      <section class="hero" aria-label="潮州木雕首页主视觉">
+        <!--
+          【实拍替换位】首页主图
+          替换方法：把下面 src 里的路径替换成真实图片路径。
+          新手易错点：路径里如果有中文或空格，文件名要和实际完全一致；错一个字母都会 404。
+          验证方法：F12 → Network，刷新后图片请求状态应为 200，不应显示红色报错。
+        -->
+        <img
+          class="hero__image"
+          src="assets/images/home/woodcarving-main.jpg"
+          alt="潮州木雕首页主视觉实拍图"
+        >
+
+        <a href="ai.html" class="hero-ai-btn" aria-label="进入 AI 数字人对话页面">
+          <span class="hero-ai-btn__text">
+            <span class="hero-ai-btn__title">AI 数字人对话</span>
+            <span class="hero-ai-btn__desc">长按说话，与木雕非遗 AI 对话</span>
+          </span>
+
+          <span class="hero-ai-btn__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="7.2" y="3.5" width="9.6" height="11.2" rx="4.8"></rect>
+              <path d="M5.5 11.2c0 3.7 2.8 6.3 6.5 6.3s6.5-2.6 6.5-6.3"></path>
+              <path d="M12 17.6v2.8"></path>
+              <path d="M9 20.5h6"></path>
+            </svg>
+          </span>
+        </a>
+      </section>
+
+      <!--
+        底部双卡片：
+        左边讲历史，右边讲传承，都是整块可点击。
+        新手易错点：active/hover 效果要加在整张 a 卡片上，而不是只给标题加。
+        验证方法：手机点卡片任何位置都应能跳转，不要只有文字能点。
+      -->
+      <section class="entry-grid" aria-label="首页分区入口">
+        <a href="history.html" class="card card--section card--history" aria-label="进入历史脉络页面">
+          <span class="card__dot" aria-hidden="true"></span>
+
+          <span class="card__flower" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.2">
+              <circle cx="12" cy="12" r="2.2" fill="currentColor" opacity="0.68"></circle>
+              <path d="M12 3.8c2.6 1.6 3.8 3.2 3.6 4.8-2.1.4-3.8-.5-5.2-2.8.2-.8.7-1.5 1.6-2Z" fill="currentColor" opacity="0.38" stroke="none"></path>
+              <path d="M20.2 12c-1.6 2.6-3.2 3.8-4.8 3.6-.4-2.1.5-3.8 2.8-5.2.8.2 1.5.7 2 1.6Z" fill="currentColor" opacity="0.38" stroke="none"></path>
+              <path d="M12 20.2c-2.6-1.6-3.8-3.2-3.6-4.8 2.1-.4 3.8.5 5.2 2.8-.2.8-.7 1.5-1.6 2Z" fill="currentColor" opacity="0.38" stroke="none"></path>
+              <path d="M3.8 12c1.6-2.6 3.2-3.8 4.8-3.6.4 2.1-.5 3.8-2.8 5.2-.8-.2-1.5-.7-2-1.6Z" fill="currentColor" opacity="0.38" stroke="none"></path>
+            </svg>
+          </span>
+
+          <div class="card__content">
+            <h2 class="card__title">历史脉络</h2>
+            <p class="card__desc">从唐宋源流到近现代展演，顺着时间走进木雕千年脉络。</p>
+          </div>
+
+          <span class="card__silhouette card__silhouette--history" aria-hidden="true">
+            <svg viewBox="0 0 72 54" width="100%" height="100%" fill="currentColor">
+              <path d="M4 36 20 28 36 24 52 28 68 36v3H4Z" opacity="0.28"></path>
+              <path d="M10 39h8v9h-8Zm21-2h9v11h-9Zm21 2h8v9h-8Z" opacity="0.16"></path>
+              <circle cx="34" cy="16" r="6" opacity="0.26"></circle>
+              <path d="M27 22c4-3 11-3 15 0l-2 10H29Z" opacity="0.26"></path>
+              <path d="M31 12h7l2-3H29Z" opacity="0.26"></path>
+            </svg>
+          </span>
+        </a>
+
+        <a href="inherit.html" class="card card--section card--master" aria-label="进入匠人传承页面">
+          <span class="card__flower" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.2">
+              <circle cx="12" cy="12" r="2.2" fill="currentColor" opacity="0.68"></circle>
+              <path d="M12 3.8c2.6 1.6 3.8 3.2 3.6 4.8-2.1.4-3.8-.5-5.2-2.8.2-.8.7-1.5 1.6-2Z" fill="currentColor" opacity="0.38" stroke="none"></path>
+              <path d="M20.2 12c-1.6 2.6-3.2 3.8-4.8 3.6-.4-2.1.5-3.8 2.8-5.2.8.2 1.5.7 2 1.6Z" fill="currentColor" opacity="0.38" stroke="none"></path>
+              <path d="M12 20.2c-2.6-1.6-3.8-3.2-3.6-4.8 2.1-.4 3.8.5 5.2 2.8-.2.8-.7 1.5-1.6 2Z" fill="currentColor" opacity="0.38" stroke="none"></path>
+              <path d="M3.8 12c1.6-2.6 3.2-3.8 4.8-3.6.4 2.1-.5 3.8-2.8 5.2-.8-.2-1.5-.7-2-1.6Z" fill="currentColor" opacity="0.38" stroke="none"></path>
+            </svg>
+          </span>
+
+          <div class="card__content">
+            <h2 class="card__title">匠人传承</h2>
+            <p class="card__desc">走近国家级传承人，看到技艺、师承与当代守护的延续。</p>
+          </div>
+
+          <span class="card__silhouette card__silhouette--master" aria-hidden="true">
+            <svg viewBox="0 0 76 56" width="100%" height="100%" fill="currentColor">
+              <path d="M8 44c10-3 18-4 28-2 9 2 18 2 32-1" opacity="0.18"></path>
+              <ellipse cx="46" cy="23" rx="13" ry="10" opacity="0.28"></ellipse>
+              <circle cx="56" cy="17" r="6" opacity="0.28"></circle>
+              <path d="m61 17 9 2-8 3Z" opacity="0.28"></path>
+              <path d="M36 23c3-4 8-6 13-5-2 6-6 9-13 11Z" opacity="0.34"></path>
+              <path d="M34 25 24 20l2 7-4 3Z" opacity="0.22"></path>
+              <path d="M45 32 43 41M49 32l1 9" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.22"></path>
+            </svg>
+          </span>
+        </a>
+      </section>
+    </main>
+
+    <!--
+      首页底部导航浅色版：
+      只给首页加 bottom-nav--light，其他页面继续走默认深色版本。
+      新手易错点：当前页高亮类一定要和基类一起写，不能只写 --active。
+      验证方法：打开 index.html 时"首页"应高亮；打开其它页面时高亮应跟着切换。
+    -->
+    <nav class="bottom-nav" aria-label="主导航">
+      <a href="index.html" class="bottom-nav__item bottom-nav__item--active" aria-current="page">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3.5 10.3 12 3.6l8.5 6.7"/>
+            <path d="M5.2 9.7v10.1a1 1 0 0 0 1 1h11.6a1 1 0 0 0 1-1V9.7"/>
+            <path d="M10 20.8v-5.2h4v5.2"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">首页</span>
+      </a>
+
+      <a href="history.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 4.2h10.4a2 2 0 0 1 2 2v12.3a1.5 1.5 0 0 0 1.5 1.5H8a2 2 0 0 1-2-2Z"/>
+            <path d="M6 4.2A2 2 0 0 0 4 6.2v1.7h2"/>
+            <path d="M9.3 9h5.2M9.3 13h5.2"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">历史</span>
+      </a>
+
+      <a href="inherit.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="8.5" cy="8.2" r="2.8"/>
+            <path d="M3.4 19.8c.5-3.3 2.7-5.4 5.1-5.4s4.6 2.1 5.1 5.4"/>
+            <circle cx="16.8" cy="9.2" r="2.3"/>
+            <path d="M14.4 19.8c.3-2.1 1.7-3.8 4-4.1"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">传承</span>
+      </a>
+
+      <a href="ai.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="8.4" y="3.3" width="7.2" height="11.2" rx="3.6"/>
+            <path d="M5.4 11c0 3.7 2.8 6.3 6.6 6.3s6.6-2.6 6.6-6.3"/>
+            <path d="M12 17.5V21"/>
+            <path d="M9.2 21h5.6"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">AI</span>
+      </a>
+    </nav>
+  </div>
+</body>
+</html>

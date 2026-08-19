@@ -1,0 +1,1189 @@
+﻿<!DOCTYPE html>
+<!--
+  这个文件是：潮州木雕·数智非遗传承 H5 网站 → 历史脉络页 (history.html)
+  在干什么：用横向鎏金时间轴展示唐→宋→明→清→近现代的木雕演变，
+            点击朝代节点切换上方展品拼图和下方文字卡片内容。
+  素材来源：仅使用本地实拍照片，不生成AI图片。
+  架构：MPA 多页面，底部固定导航栏，内嵌 CSS + Vanilla JS。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <!-- viewport-fit=cover：适配刘海屏手机，让页面铺满整个屏幕 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="循着唐、宋、明、清至近现代的时间轴，浏览潮州木雕的工艺演进、代表展品与传承故事。">
+  <title>历史脉络 · 潮州木雕</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* ===== 历史页专属样式（内嵌，不依赖外部框架） ===== */
+
+    /* 全局底层背景：米白宣纸肌理，全程固定不替换 */
+    .history-page {
+      min-height: 100vh;
+      max-width: calc(100vh * 9/16);
+      margin: 0 auto;
+      width: 100%;
+      background: url('assets/images/history/woodbackground.jpg') center top / cover no-repeat fixed;
+      position: relative;
+      padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
+
+    /* 叠加极低透明度卷草木雕暗纹（用伪元素模拟，实际可换真实纹理图） */
+    .history-page::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(180, 140, 80, 0.04) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(180, 140, 80, 0.03) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ===== 1. 顶部固定标题栏 ===== */
+    .history-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: rgba(245, 239, 224, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+      transition: background 0.4s ease;
+    }
+
+    /* 宽屏下sticky标题栏限制宽度并居中（父容器已居中，子元素100%宽度即可） */
+    @media (min-aspect-ratio: 9/16) {
+      .history-header {
+        width: 100%;
+        box-sizing: border-box;
+      }
+    }
+
+    /* 夜间模式标题栏 */
+    .history-page.dark .history-header {
+      background: rgba(62, 42, 32, 0.92);
+      border-bottom-color: rgba(212, 175, 55, 0.25);
+    }
+
+    .history-header__titles {
+      text-align: center;
+      flex: 1;
+    }
+
+    .history-header__title {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      font-weight: 700;
+      color: #3A2A1E;
+      letter-spacing: 0.15em;
+      margin: 0;
+      transition: color 0.4s ease;
+    }
+
+    .history-page.dark .history-header__title {
+      color: #D4AF37;
+    }
+
+    .history-header__subtitle {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      color: #8A7B6E;
+      letter-spacing: 0.1em;
+      margin-top: 2px;
+      transition: color 0.4s ease;
+    }
+
+    .history-page.dark .history-header__subtitle {
+      color: #B8A88A;
+    }
+
+    .history-header__actions {
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .history-header__btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      background: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #5C4033;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .history-page.dark .history-header__btn {
+      background: rgba(92, 64, 51, 0.6);
+      border-color: rgba(212, 175, 55, 0.4);
+      color: #D4AF37;
+    }
+
+    .history-header__btn:active {
+      transform: scale(0.92);
+    }
+
+    .history-header__btn svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* ===== 2. 主内容区 ===== */
+    .history-main {
+      position: relative;
+      z-index: 1;
+      padding: 16px 16px calc(20px + var(--nav-height, 56px));
+    }
+
+    /* ===== 3. 展品拼图模块 ===== */
+    .gallery {
+      margin-bottom: 20px;
+      opacity: 1;
+      transition: opacity 0.5s ease;
+    }
+
+    .gallery.fade-out {
+      opacity: 0;
+    }
+
+    .gallery__grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .gallery__item {
+      aspect-ratio: 4 / 3;
+      border-radius: 14px;
+      object-fit: cover;
+      box-shadow: 0 4px 16px rgba(92, 64, 51, 0.12);
+      cursor: pointer;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      background: #E8DFC8;
+    }
+    .gallery__picture {
+      display: block;
+      min-width: 0;
+      min-height: 0;
+    }
+    .gallery__picture .gallery__item {
+      width: 100%;
+      height: 100%;
+    }
+
+    .gallery__item:active {
+      transform: scale(0.96);
+    }
+
+    /* 三图布局（某些朝代用） */
+    .gallery__grid--three {
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: auto auto;
+    }
+
+    .gallery__grid--three .gallery__item:first-child {
+      grid-column: 1 / -1;
+      aspect-ratio: 16 / 9;
+    }
+
+    /* ===== 4. 横向鎏金时间轴 ===== */
+    .timeline-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 8px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .timeline-bar__line {
+      position: absolute;
+      top: 50%;
+      left: 20px;
+      right: 20px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #D4AF37, #D4AF37, transparent);
+      transform: translateY(-50%);
+      z-index: 0;
+      pointer-events: none; /* 防止线条拦截节点点击事件 */
+    }
+
+    .timeline-bar__node {
+      position: relative;
+      z-index: 2;                       /* 必须比 timeline-bar__line 高，确保点击落在节点上而不是被线条拦截 */
+      display: flex;
+      flex: 1;                          /* 5 个节点均分时间轴宽度，避免节点之间留大片空白点不到 */
+      max-width: 80px;                  /* 太宽会让节点分散，限制最大宽度保持紧凑 */
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;       /* 禁止移动端双击缩放，让单击响应更快 */
+      /* 加大点击区域，保证移动端 >= 44px
+         人话讲：手指点击的最小舒适区域是 44px，
+         不然用户点半天点不中，会觉得"按钮坏了"。
+         新手易错点：不能只给 dot 加 padding，要给整个 node 加，
+         不然文字部分点不到。
+         验证方法：F12 选中节点看盒模型，高度应 >= 44px */
+      padding: 12px 4px;
+      min-width: 44px;
+      min-height: 44px;
+      justify-content: center;
+    }
+
+    .timeline-bar__dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #F5EFE0;
+      border: 2px solid #D4AF37;
+      transition: all 0.35s ease;
+    }
+
+    .timeline-bar__node.active .timeline-bar__dot {
+      background: #C43D2B;
+      border-color: #D4AF37;
+      box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.3), 0 2px 8px rgba(196, 61, 43, 0.3);
+      transform: scale(1.2);
+    }
+
+    .timeline-bar__label {
+      font-family: var(--font-serif);
+      font-size: 13px;
+      color: #8A7B6E;
+      transition: color 0.35s ease;
+    }
+
+    .timeline-bar__node.active .timeline-bar__label {
+      color: #C43D2B;
+      font-weight: 700;
+    }
+
+    .history-page.dark .timeline-bar__label {
+      color: #B8A88A;
+    }
+
+    .history-page.dark .timeline-bar__node.active .timeline-bar__label {
+      color: #E8C96A;
+    }
+
+    /* ===== 5. 宣纸文字卡片 ===== */
+    .dynasty-card-wrapper {
+      background: rgba(255, 253, 245, 0.95);
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      border-radius: 16px;
+      padding: 12px 18px 10px;
+      position: relative;
+      box-shadow: 0 6px 24px rgba(92, 64, 51, 0.08);
+      transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+      max-height: 260px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .history-page.dark .dynasty-card-wrapper {
+      background: rgba(62, 42, 32, 0.9);
+      border-color: rgba(212, 175, 55, 0.45);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    /* 上下木纹渐变遮罩（提示可滑动）
+       高度从 32px 减小到 20px，避免遮挡底部 footer 的印章和语音按钮
+       新手易错点：渐变遮罩太高会盖住交互元素，导致用户点不到
+       验证：F12 检查 ::after 的高度应为 20px，且不会覆盖 footer 区域 */
+    .dynasty-card-wrapper::before,
+    .dynasty-card-wrapper::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 20px;
+      pointer-events: none;
+      z-index: 2;
+      transition: opacity 0.3s ease;
+    }
+
+    .dynasty-card-wrapper::before {
+      top: 0;
+      background: linear-gradient(to bottom, rgba(255, 253, 245, 1), rgba(255, 253, 245, 0));
+    }
+
+    .dynasty-card-wrapper::after {
+      bottom: 0;
+      background: linear-gradient(to top, rgba(255, 253, 245, 1), rgba(255, 253, 245, 0));
+    }
+
+    .history-page.dark .dynasty-card-wrapper::before {
+      background: linear-gradient(to bottom, rgba(62, 42, 32, 1), rgba(62, 42, 32, 0));
+    }
+
+    .history-page.dark .dynasty-card-wrapper::after {
+      background: linear-gradient(to top, rgba(62, 42, 32, 1), rgba(62, 42, 32, 0));
+    }
+
+    /* 卡片内部滚动区（flex:1 占满剩余空间，footer 固定在底部） */
+    .dynasty-card__scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+      min-height: 0; /* flex 子元素必须设 min-height:0 才能正确缩小 */
+    }
+
+    .dynasty-card-wrapper::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .dynasty-card-wrapper::-webkit-scrollbar-thumb {
+      background: rgba(212, 175, 55, 0.4);
+      border-radius: 2px;
+    }
+
+    /* 卡片头部：朝代名 + 年份 */
+    .dynasty-card__header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .dynasty-card__name {
+      font-family: var(--font-serif);
+      font-size: 28px;
+      font-weight: 700;
+      color: #C43D2B;
+      margin: 0;
+      transition: color 0.4s ease;
+    }
+
+    .history-page.dark .dynasty-card__name {
+      color: #E8C96A;
+    }
+
+    .dynasty-card__year {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      color: #8A7B6E;
+      transition: color 0.4s ease;
+    }
+
+    .history-page.dark .dynasty-card__year {
+      color: #B8A88A;
+    }
+
+    /* 三段式正文，鎏金细线分割 */
+    .dynasty-card__text {
+      font-family: var(--font-sans);
+      font-size: 14.5px;
+      line-height: 1.7;
+      color: #3A2A1E;
+      margin: 0;
+      transition: color 0.4s ease;
+    }
+
+    .history-page.dark .dynasty-card__text {
+      color: #E0D4B8;
+    }
+
+    .dynasty-card__divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.5), transparent);
+      margin: 12px 0;
+    }
+
+    /* 卡片底部：语音按钮 + 印章
+       position:relative + z-index:3 让 footer "浮"在底部渐变遮罩(::after, z-index:2)之上，
+       否则渐变遮罩会盖住印章和语音按钮，导致用户点不到。
+       新手易错点：z-index 只对"定位元素"(position 非 static)生效，
+       如果只写 z-index:3 不加 position:relative，z-index 会被浏览器忽略，footer 还是被遮挡。
+       验证：F12 选中 footer，Computed 面板看 z-index 应为 3，且 Layers 面板中 footer 在 ::after 之上。 */
+    .dynasty-card__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 16px;
+      padding-top: 4px;
+      position: relative;
+      z-index: 3;
+    }
+
+    .dynasty-card__speak {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border-radius: 30px / 26px;
+      border: 1.5px solid #c8a466;
+      background: linear-gradient(180deg, #faf5ea 0%, #ede2c8 100%);
+      color: #4a3829;
+      font-family: var(--font-serif);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+      box-shadow:
+        0 3px 10px rgba(92,64,51,0.12),
+        inset 0 1px 0 rgba(255,255,255,0.6),
+        inset 0 -1px 0 rgba(100,70,30,0.12);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .history-page.dark .dynasty-card__speak {
+      background: linear-gradient(180deg, #f5e6c8 0%, #e0cba0 50%, #d0b88c 100%);
+      color: #3a2818;
+      border-color: #c8a466;
+    }
+
+    .dynasty-card__speak:active {
+      filter: brightness(0.95);
+      transform: scale(0.98);
+    }
+
+    .dynasty-card__speak svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .dynasty-card__seal {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      background: #C43D2B;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .dynasty-card__seal:active {
+      transform: scale(0.92);
+    }
+
+    .dynasty-card__seal span {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      color: #D4AF37;
+      font-weight: 700;
+    }
+
+    /* ===== 6. 全屏弹窗（Lightbox） ===== */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.35s ease, visibility 0.35s ease;
+    }
+
+    .lightbox.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* 关闭按钮：右上角固定 */
+    .lightbox__close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 1001;
+      transition: background 0.3s ease;
+    }
+
+    .lightbox__close:active {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(0.92);
+    }
+
+    .lightbox__img {
+      max-width: 95vw;
+      max-height: 90vh;
+      border-radius: 8px;
+      object-fit: contain;
+      transform-origin: center center;
+      transition: transform 0.15s ease;
+      touch-action: none;
+    }
+
+    /* ===== 7. 拓展史料气泡（长按彩蛋） ===== */
+    .trivia-bubble {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      z-index: 500;
+      background: rgba(62, 42, 32, 0.95);
+      color: #F5EFE0;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      max-width: 85vw;
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      line-height: 1.6;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.35s ease;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+    }
+
+    .trivia-bubble.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ===== 8. 微粒飘落动画容器 ===== */
+    .particles-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+      overflow: hidden;
+    }
+
+    .particle {
+      position: absolute;
+      font-size: 16px;
+      opacity: 0;
+      animation: particleFall 2.5s ease-out forwards;
+    }
+
+    @keyframes particleFall {
+      0% {
+        opacity: 0.7;
+        transform: translateY(-20px) rotate(0deg);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(120px) rotate(360deg);
+      }
+    }
+
+    /* ===== 9. 朗读时底层暗纹微光动画 ===== */
+    .history-page.speaking::before {
+      animation: subtleGlow 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes subtleGlow {
+      0% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    /* ===== 10. 底部导航（复用 style.css，此处补充历史页 active 高亮） ===== */
+    /* 已在 style.css 中定义，无需重复 */
+
+    /* ===== 响应式微调 ===== */
+    @media (max-width: 360px) {
+      .history-header__title { font-size: 22px; }
+      .dynasty-card__name { font-size: 24px; }
+      .dynasty-card__text { font-size: 13.5px; }
+      .gallery__grid { gap: 8px; }
+      .gallery__item { border-radius: 10px; }
+    }
+
+    @media (min-width: 420px) {
+      .history-main { padding: 20px 20px 24px; }
+      .gallery__grid { gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="history-page" id="historyPage">
+
+    <!-- ===== 顶部固定标题栏 ===== -->
+    <header class="history-header">
+      <div class="history-header__titles">
+        <h1 class="history-header__title">历史脉络</h1>
+        <p class="history-header__subtitle">光影中的木雕演变</p>
+      </div>
+      <div class="history-header__actions">
+        <!-- 月亮按钮：明暗展厅切换 -->
+        <button class="history-header__btn" id="darkModeBtn" aria-label="切换展厅模式">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ===== 主内容区 ===== -->
+    <main class="history-main">
+
+      <!-- 展品拼图模块 -->
+      <section class="gallery" id="gallery" aria-label="展品拼图">
+        <div class="gallery__grid" id="galleryGrid">
+          <!-- JS 动态渲染 -->
+        </div>
+      </section>
+
+      <!-- 横向鎏金时间轴 -->
+      <nav class="timeline-bar" id="timelineBar" aria-label="朝代时间轴">
+        <div class="timeline-bar__line"></div>
+        <!-- JS 动态渲染节点 -->
+      </nav>
+
+      <!-- 宣纸文字卡片 -->
+      <article class="dynasty-card-wrapper" id="dynastyCardWrapper">
+        <div class="dynasty-card__scroll" id="dynastyCardScroll">
+          <div class="dynasty-card__header">
+            <h2 class="dynasty-card__name" id="dynastyName"></h2>
+            <span class="dynasty-card__year" id="dynastyYear"></span>
+          </div>
+          <div id="dynastyTextBody">
+            <!-- JS 渲染三段式正文 -->
+          </div>
+        </div>
+        <div class="dynasty-card__footer">
+          <button class="dynasty-card__speak" id="speakBtn" aria-label="点击听讲解">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+            <span>点击听讲解</span>
+          </button>
+          <div class="dynasty-card__seal" id="dynastySeal" aria-label="长按查看拓展史料">
+            <span>雕</span>
+          </div>
+        </div>
+      </article>
+
+    </main>
+
+    <!-- ===== 全屏弹窗 ===== -->
+    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-labelledby="lightboxTitle" aria-hidden="true">
+      <span class="sr-only" id="lightboxTitle">展品图片预览</span>
+      <button class="lightbox__close" id="lightboxClose" aria-label="关闭">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <img class="lightbox__img" id="lightboxImg" src="" alt="">
+    </div>
+
+    <!-- ===== 拓展史料气泡 ===== -->
+    <div class="trivia-bubble" id="triviaBubble" aria-hidden="true"></div>
+
+    <!-- ===== 微粒容器 ===== -->
+    <div class="particles-container" id="particlesContainer"></div>
+
+    <!-- ===== 底部固定导航栏（与全站共用结构） ===== -->
+    <nav class="bottom-nav" aria-label="主导航">
+      <a href="index.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3.5 10.3 12 3.6l8.5 6.7"/>
+            <path d="M5.2 9.7v10.1a1 1 0 0 0 1 1h11.6a1 1 0 0 0 1-1V9.7"/>
+            <path d="M10 20.8v-5.2h4v5.2"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">首页</span>
+      </a>
+
+      <a href="history.html" class="bottom-nav__item bottom-nav__item--active" aria-current="page">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 4.2h10.4a2 2 0 0 1 2 2v12.3a1.5 1.5 0 0 0 1.5 1.5H8a2 2 0 0 1-2-2Z"/>
+            <path d="M6 4.2A2 2 0 0 0 4 6.2v1.7h2"/>
+            <path d="M9.3 9h5.2M9.3 13h5.2"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">历史</span>
+      </a>
+
+      <a href="inherit.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="8.5" cy="8.2" r="2.8"/>
+            <path d="M3.4 19.8c.5-3.3 2.7-5.4 5.1-5.4s4.6 2.1 5.1 5.4"/>
+            <circle cx="16.8" cy="9.2" r="2.3"/>
+            <path d="M14.4 19.8c.3-2.1 1.7-3.8 4-4.1"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">传承</span>
+      </a>
+
+      <a href="ai.html" class="bottom-nav__item">
+        <span class="bottom-nav__icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="8.4" y="3.3" width="7.2" height="11.2" rx="3.6"/>
+            <path d="M5.4 11c0 3.7 2.8 6.3 6.6 6.3s6.6-2.6 6.6-6.3"/>
+            <path d="M12 17.5V21"/>
+            <path d="M9.2 21h5.6"/>
+          </svg>
+        </span>
+        <span class="bottom-nav__label">AI</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <!-- 引入全站公共工具函数（escapeHtml等），必须在内联脚本之前加载 -->
+  <script src="js/common.js"></script>
+  <script>
+    /* ============================================================
+     * 历史脉络页 JS（纯原生，无框架）
+     * 架构：数据层(DYNASTIES) → 渲染层 → 交互层
+     * 分层解耦：数据层 / 渲染层 / 交互层 分离
+     * ============================================================ */
+
+    // ===== 【数据层】5 个朝代的完整数据 =====
+    // 人话讲：这里就是"菜谱"，每个朝代一道菜，包含名字、年份、正文、图片、彩蛋 trivia。
+    // 新手易错点：图片路径相对于 history.html 的位置——本文件在项目根目录，
+    //   图片在 assets/images/history/历史页UI元素参考/ 里，所以路径是 "assets/images/history/历史页UI元素参考/xxx"。
+    const DYNASTIES = [
+      {
+        key: 'tang',
+        name: '唐',
+        year: '618—907',
+        texts: [
+          '唐代中原人口南迁，木构建筑与雕刻技艺传入潮州，早期木雕参与寺庙、梁注、斗拱和莲花卷草线样相关。',
+          '受佛教文化与中原工艺影响，早期作品以浮雕为主，题材多为莲花、卷草等纹样，风格古朴浑厚。',
+          '为后世潮州木雕的兴盛奠定了根基，开启了千年刀木传承的序章。'
+        ],
+        images: [
+          'assets/images/history/历史页UI元素参考/1.jpeg',
+          'assets/images/history/历史页UI元素参考/8.JPG',
+          'assets/images/history/历史页UI元素参考/12.JPG',
+          'assets/images/history/历史页UI元素参考/6.JPG'
+        ],
+        trivia: '唐代潮州开元寺始建于738年，寺内现存部分木构构件被认为是潮州木雕最早的实物遗存之一。',
+        particle: '蓮'
+      },
+      {
+        key: 'song',
+        name: '宋',
+        year: '960—1279',
+        texts: [
+          '宋代潮州经济繁荣，海外贸易兴盛，木雕技法渐趋成熟，广泛应用于祠堂庙宇建筑装饰与神龛屏风制作。',
+          '镂雕、圆雕、浮雕并用，题材扩展到人物花鸟、戏曲故事，线条流畅层次丰富。',
+          '开元寺韩文公祠等建筑的木雕装饰，见证了这一时期工艺的显著精进。'
+        ],
+        images: [
+          'assets/images/history/历史页UI元素参考/2.JPG',
+          'assets/images/history/历史页UI元素参考/3.JPG',
+          'assets/images/history/历史页UI元素参考/4.JPG',
+          'assets/images/history/历史页UI元素参考/5.JPG'
+        ],
+        trivia: '宋代潮州港是海上丝绸之路重要港口，木雕随商船远销东南亚，成为最早出海的潮州工艺之一。',
+        particle: '雲'
+      },
+      {
+        key: 'ming',
+        name: '明',
+        year: '1368—1644',
+        texts: [
+          '明代潮州商贸发达宗族文化兴盛，祠堂家庙广建木雕需求大增，镂空多层技法趋于成熟。',
+          '金漆木雕成为特色——以生漆贴金箔金碧辉煌，题材多取材三国水浒等戏曲小说。',
+          '构图繁复层层叠叠远近皆可观赏，潮州金漆木雕作为独立流派正式确立。'
+        ],
+        images: [
+          'assets/images/history/历史页UI元素参考/7.JPG',
+          'assets/images/history/历史页UI元素参考/9.JPG',
+          'assets/images/history/历史页UI元素参考/10.JPG',
+          'assets/images/history/历史页UI元素参考/11.JPG'
+        ],
+        trivia: '明代潮州匠人已掌握"多层通雕"绝技，一块木板可镂刻多达五层，每层图案独立且相互呼应。',
+        particle: '金'
+      },
+      {
+        key: 'qing',
+        name: '清',
+        year: '1644—1912',
+        texts: [
+          '清代潮州木雕工艺登峰造极，蟹篓镂空技法成为绝活，以整段木头雕出竹交织的蟹篓与篓中横行的螃蟹。',
+          '纤毫毕现栩栩如生，"潮州金漆木雕"与浙江东阳木雕并称中国两大木雕体系。',
+          '作品远销东南亚成为华侨乡愁的寄托与身份的象征，闻名海内外。'
+        ],
+        images: [
+          'assets/images/history/历史页UI元素参考/13.jpg',
+          'assets/images/history/历史页UI元素参考/14.jpg',
+          'assets/images/history/历史页UI元素参考/15.jpg',
+          'assets/images/history/历史页UI元素参考/16.jpg'
+        ],
+        trivia: '清代潮州木雕匠人陈氏家族独创"蟹篓"技法，一件作品需耗时数月，竹篾细如发丝却不断裂。',
+        particle: '蟹'
+      },
+      {
+        key: 'modern',
+        name: '近现代',
+        year: '1912—至今',
+        texts: [
+          '2006年潮州木雕入选首批国家级非物质文化遗产名录，涌现出张鉴轩陈培臣等国家级代表性传承人。',
+          '当代匠人群体坚守传统技艺同时数智技术赋能传承，3D扫描建档数字孪生展示AI辅助设计。',
+          '千年技艺在云端焕发新生走向更广阔的世界，非遗保护与创新并重薪火相传。'
+        ],
+        images: [
+          'assets/images/history/历史页UI元素参考/17.jpg',
+          'assets/images/history/历史页UI元素参考/18.jpg',
+          'assets/images/history/历史页UI元素参考/19.jpg',
+          'assets/images/history/历史页UI元素参考/20.jpg'
+        ],
+        trivia: '2006年5月20日，潮州木雕经国务院批准列入第一批国家级非物质文化遗产名录，编号Ⅶ-41。',
+        particle: '新'
+      }
+    ];
+
+    // ===== 【状态层】当前激活的朝代索引、音乐开关、暗色模式 =====
+    let currentIndex = 0;
+    let isDarkMode = false;
+    let longPressTimer = null;
+    // 切换动画锁：防止 400ms 淡入淡出期间用户快速连点导致最终显示错乱
+    // 人话讲：就像电梯门正在关时你狂按楼层，得等门关了再响应下一次，不然会乱。
+    let isSwitching = false;
+
+    // ===== 【DOM 引用】预先抓取，避免重复查询 =====
+    const page = document.getElementById('historyPage');
+    const gallery = document.getElementById('gallery');
+    const galleryGrid = document.getElementById('galleryGrid');
+    const timelineBar = document.getElementById('timelineBar');
+    const dynastyName = document.getElementById('dynastyName');
+    const dynastyYear = document.getElementById('dynastyYear');
+    const dynastyTextBody = document.getElementById('dynastyTextBody');
+    const dynastyCardWrapper = document.getElementById('dynastyCardWrapper');
+    const dynastyCardScroll = document.getElementById('dynastyCardScroll');
+    const speakBtn = document.getElementById('speakBtn');
+    const dynastySeal = document.getElementById('dynastySeal');
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightboxImg');
+    const triviaBubble = document.getElementById('triviaBubble');
+    const particlesContainer = document.getElementById('particlesContainer');
+    const darkModeBtn = document.getElementById('darkModeBtn');
+    let lastLightboxTrigger = null;
+
+    // ===== 【渲染层】初始化时间轴节点 =====
+    function renderTimeline() {
+      // 清空已有节点（防止重复渲染）
+      const existingNodes = timelineBar.querySelectorAll('.timeline-bar__node');
+      existingNodes.forEach(n => n.remove());
+
+      DYNASTIES.forEach((d, i) => {
+        const node = document.createElement('div');
+        node.className = 'timeline-bar__node' + (i === 0 ? ' active' : '');
+        node.dataset.index = String(i);
+        // 使用 escapeHtml 防止 XSS 攻击
+        node.innerHTML = '<div class="timeline-bar__dot"></div><span class="timeline-bar__label">' + escapeHtml(d.name) + '</span>';
+        // 直接给节点绑点击：比事件委托更稳，移动端某些浏览器对 absolute 覆盖层的 click 委托不敏感
+        // 先清空再绑定，防止 renderTimeline 被重复调用时叠加多次
+        // 同时监听 touchend，确保手机上手指抬起时立刻响应，不用等 300ms click 延迟
+        node.onclick = null;
+        node.ontouchend = null;
+        node.onclick = function () { switchDynasty(i); };
+        node.ontouchend = function (e) {
+          // 防止 touchend 继续冒泡成 click 导致重复切换
+          e.preventDefault();
+          switchDynasty(i);
+        };
+        timelineBar.appendChild(node);
+      });
+
+      console.log('[初始化] 时间轴节点已渲染，共', DYNASTIES.length, '个');
+    }
+
+    // ===== 【渲染层】渲染展品拼图 =====
+    function renderGallery(index) {
+      const dynasty = DYNASTIES[index];
+      galleryGrid.innerHTML = '';
+      dynasty.images.forEach(src => {
+        const picture = document.createElement('picture');
+        picture.className = 'gallery__picture';
+        const source = document.createElement('source');
+        source.type = 'image/webp';
+        const imageName = src.split('/').pop().replace(/\.[^.]+$/, '');
+        source.srcset = 'assets/images/history/optimized/' + imageName + '.webp';
+        const img = document.createElement('img');
+        img.className = 'gallery__item';
+        img.src = 'assets/images/history/optimized/' + imageName + '.jpg';
+        img.alt = dynasty.name + '代木雕展品';
+        img.tabIndex = 0;
+        // 首屏展品图直接加载，避免 lazy 在部分浏览器/弱网时不触发导致裂图
+        // 新手易错点：首屏关键内容加 loading='lazy'，会让浏览器觉得"不着急加载"，
+        //   用户可能先看到空白或裂图。非首屏/屏外大图才适合懒加载。
+        //   验证：Network 面板里这几个 img 请求应在 DOMContentLoaded 后不久就出现。
+        img.onerror = function () {
+          // 图片加载失败时，不显示浏览器默认裂图，而是用一个 div 占位显示朝代名
+          // 新手易错点：<img> 是"替换元素"，给它设 textContent/flex 浏览器不会渲染，
+          //   必须用 div 这种"非替换元素"才能显示文字。
+          //   验证：把某张图片路径故意改错，刷新后应看到"XX展品暂缺"文字，而不是裂图或空白。
+          const placeholder = document.createElement('div');
+          placeholder.className = 'gallery__item';
+          placeholder.textContent = dynasty.name + '展品暂缺';
+          placeholder.style.display = 'flex';
+          placeholder.style.alignItems = 'center';
+          placeholder.style.justifyContent = 'center';
+          placeholder.style.background = '#C9B896';
+          placeholder.style.color = '#5C4033';
+          placeholder.style.fontSize = '14px';
+          placeholder.style.textAlign = 'center';
+          placeholder.style.borderRadius = '14px';
+          picture.replaceWith(placeholder);
+        };
+        picture.appendChild(source);
+        picture.appendChild(img);
+        galleryGrid.appendChild(picture);
+      });
+    }
+
+    // ===== 【渲染层】渲染朝代卡片文字 =====
+    function renderDynastyCard(index) {
+      const d = DYNASTIES[index];
+      dynastyName.textContent = d.name;
+      dynastyYear.textContent = d.year;
+      // 使用 escapeHtml 防止 XSS 攻击
+      dynastyTextBody.innerHTML = d.texts.map((t, i) =>
+        (i > 0 ? '<div class="dynasty-card__divider"></div>' : '') + '<p class="dynasty-card__text">' + escapeHtml(t) + '</p>'
+      ).join('');
+      // 重置滚动位置
+      dynastyCardScroll.scrollTop = 0;
+    }
+
+    // ===== 【交互层】切换朝代 =====
+    function switchDynasty(index) {
+      // 同一朝代或动画进行中时不响应，防止连点导致状态错乱
+      if (index === currentIndex || isSwitching) return;
+      isSwitching = true;
+      // 淡出拼图
+      gallery.classList.add('fade-out');
+      setTimeout(() => {
+        currentIndex = index;
+        renderGallery(index);
+        renderDynastyCard(index);
+        // 更新 active 节点
+        updateActiveNode(index);
+        // 飘落微粒
+        spawnParticles(DYNASTIES[index].particle);
+        // 淡入拼图
+        gallery.classList.remove('fade-out');
+        isSwitching = false;
+      }, 400);
+    }
+
+    function updateActiveNode(index) {
+      const nodes = timelineBar.querySelectorAll('.timeline-bar__node');
+      nodes.forEach((n, i) => {
+        n.classList.toggle('active', i === index);
+      });
+    }
+
+    // ===== 【微粒动画】飘落对应朝代透明纹样微粒 =====
+    function spawnParticles(char) {
+      for (let i = 0; i < 6; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.textContent = char;
+        p.style.left = (15 + Math.random() * 70) + '%';
+        p.style.top = (30 + Math.random() * 20) + '%';
+        p.style.animationDelay = (Math.random() * 0.8) + 's';
+        p.style.fontSize = (14 + Math.random() * 8) + 'px';
+        particlesContainer.appendChild(p);
+        // 动画结束后移除
+        setTimeout(() => p.remove(), 3000);
+      }
+    }
+
+    // ===== 【语音朗读】浏览器原生 TTS =====
+    function speakCurrentDynasty() {
+      const d = DYNASTIES[currentIndex];
+      const fullText = d.name + '，' + d.year + '。' + d.texts.join('');
+      if ('speechSynthesis' in window) {
+        // 停止之前的朗读
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(fullText);
+        utterance.lang = 'zh-CN';
+        utterance.rate = 0.9;
+        utterance.pitch = 1;
+        // 朗读时添加微光效果
+        page.classList.add('speaking');
+        utterance.onend = () => page.classList.remove('speaking');
+        utterance.onerror = () => page.classList.remove('speaking');
+        window.speechSynthesis.speak(utterance);
+      } else {
+        alert('您的浏览器不支持语音朗读功能');
+      }
+    }
+
+    // ===== 【Lightbox】全屏弹窗 + 双指缩放 =====
+    let currentScale = 1;
+    let initialDistance = 0;
+
+    function openLightbox(src, trigger) {
+      lastLightboxTrigger = trigger || null;
+      lightboxImg.src = src.replace(/\.[^.]+$/, '.jpg');
+      lightbox.classList.add('visible');
+      lightbox.setAttribute('aria-hidden', 'false');
+      currentScale = 1;
+      lightboxImg.style.transform = 'scale(1)';
+      lightboxClose.focus();
+    }
+
+    function closeLightbox() {
+      lightbox.classList.remove('visible');
+      lightbox.setAttribute('aria-hidden', 'true');
+      lightboxImg.src = '';
+      currentScale = 1;
+      if (lastLightboxTrigger) lastLightboxTrigger.focus();
+    }
+
+    // 关闭按钮点击
+    const lightboxClose = document.getElementById('lightboxClose');
+    if (lightboxClose) {
+      lightboxClose.addEventListener('click', closeLightbox);
+    }
+
+    // ESC 键关闭
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && lightbox.classList.contains('visible')) {
+        closeLightbox();
+      }
+    });
+
+    // 双指缩放逻辑（简化版：两指距离变化 → scale）
+    let touches = [];
+    let isPinching = false;
+    
+    lightboxImg.addEventListener('touchstart', (e) => {
+      touches = Array.from(e.touches);
+      if (touches.length === 2) {
+        e.preventDefault(); // 双指操作时阻止默认行为
+        isPinching = true;
+        initialDistance = Math.hypot(
+          touches[0].clientX - touches[1].clientX,
+          touches[0].clientY - touches[1].clientY
+        );
+      }
+    }, { passive: false });
+
+    lightboxImg.addEventListener('touchmove', (e) => {
+      if (!isPinching) return; // 单指操作不处理
+      
+      e.preventDefault();
+      touches = Array.from(e.touches);
+      if (touches.length === 2) {
+        const dist = Math.hypot(
+          touches[0].clientX - touches[1].clientX,
+          touches[0].clientY - touches[1].clientY
+        );
+        const ratio = dist / initialDistance;
+        currentScale = Math.min(Math.max(ratio, 1), 3);
+        lightboxImg.style.transform = 'scale(' + currentScale + ')';
+      }
+    }, { passive: false });
+    
+    lightboxImg.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) {
+        isPinching = false;
+      }
+    });
+
+    // 下滑关闭
+    let touchStartY = 0;
+    lightbox.addEventListener('touchstart', (e) => {
+      touchStartY = e.touches[0].clientY;
+    });
+    lightbox.addEventListener('touchend', (e) => {
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (dy > 80) closeLightbox();
+    });
+
+    // 单击关闭（非缩放操作时）
+    lightbox.addEventListener('click', (e) => {
+      if (e.target === lightbox) closeLightbox();
+    });
+
+    // ===== 【长按彩蛋】印章长按 2 秒弹出拓展史料 =====
+    function startLongPress() {
+      longPressTimer = setTimeout(() => {
+        const d = DYNASTIES[currentIndex];
+        triviaBubble.textContent = d.trivia;
+        triviaBubble.classList.add('visible');
+        triviaBubble.setAttribute('aria-hidden', 'false');
+      }, 2000);
+    }
+
+    function cancelLongPress() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      triviaBubble.classList.remove('visible');
+      triviaBubble.setAttribute('aria-hidden', 'true');
+    }
+
+    dynastySeal.addEventListener('touchstart', startLongPress);
+    dynastySeal.addEventListener('touchend', cancelLongPress);
+    dynastySeal.addEventListener('touchcancel', cancelLongPress);
+    // 鼠标兼容（桌面调试用）
+    dynastySeal.addEventListener('mousedown', startLongPress);
+    dynastySeal.addEventListener('mouseup', cancelLongPress);
+    dynastySeal.addEventListener('mouseleave', cancelLongPress);
+
+    // ===== 【明暗模式】右上角月亮按钮切换 =====
+    darkModeBtn.addEventListener('click', () => {
+      isDarkMode = !isDarkMode;
+      page.classList.toggle('dark', isDarkMode);
+    });
+
+    // ===== 【展品点击图片】 =====
+    galleryGrid.addEventListener('click', (e) => {
+      if (e.target.classList.contains('gallery__item')) {
+        openLightbox(e.target.src, e.target);
+      }
+    });
+    galleryGrid.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('gallery__item')) {
+        e.preventDefault();
+        openLightbox(e.target.src, e.target);
+      }
+    });
+
+    // ===== 【语音按钮】 =====
+    speakBtn.addEventListener('click', speakCurrentDynasty);
+
+    // ===== 【初始化渲染】默认显示唐朝 =====
+    renderTimeline();
+    renderGallery(0);
+    renderDynastyCard(0);
+
+    // 新手验证提示：打开控制台输入以下命令验证
+    // console.log('朝代数量:', DYNASTIES.length);       // 应为 5
+    // console.log('当前索引:', currentIndex);             // 应为 0（唐）
+    // console.log('时间轴节点数:', timelineBar.querySelectorAll('.timeline-bar__node').length); // 应为 5
+    // console.log('拼图图片数:', galleryGrid.children.length); // 应为 4
+  </script>
+</body>
+</html>
+
