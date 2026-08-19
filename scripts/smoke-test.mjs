@@ -29,6 +29,7 @@ for (const page of publicPages) {
 }
 
 const inheritHtml = await checkStatus('/inherit.html', 200);
+const masterData = await checkStatus('/js/inherit-data.js', 200);
 const masterHtml = await checkStatus('/master.html', 200);
 if (!masterHtml.includes('url=inherit.html') || !masterHtml.includes('window.location.replace("inherit.html")')) {
   console.error('/master.html is missing its browser redirect to /inherit.html');
@@ -37,8 +38,8 @@ if (!masterHtml.includes('url=inherit.html') || !masterHtml.includes('window.loc
   console.log('/master.html: browser redirect to /inherit.html present');
 }
 
-const masterEntries = (inheritHtml.match(/name: '/g) || []).length;
-if (masterEntries !== 18 || !inheritHtml.includes('var MASTERS = [') || !inheritHtml.includes('portrait: false')) {
+const masterEntries = (masterData.match(/name: '/g) || []).length;
+if (masterEntries !== 18 || !masterData.includes('var MASTERS = [') || !masterData.includes('portrait: false')) {
   console.error('inherit.html is missing the master data or portrait placeholder behavior.');
   failed = true;
 } else {
