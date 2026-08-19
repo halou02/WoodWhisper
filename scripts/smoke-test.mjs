@@ -29,12 +29,12 @@ for (const page of publicPages) {
 }
 
 const inheritHtml = await checkStatus('/inherit.html', 200);
-const masterResponse = await fetch(baseUrl + '/master.html', { redirect: 'follow' });
-if (!masterResponse.url.endsWith('/inherit.html')) {
-  console.error('/master.html did not redirect to /inherit.html');
+const masterHtml = await checkStatus('/master.html', 200);
+if (!masterHtml.includes('url=inherit.html') || !masterHtml.includes('window.location.replace("inherit.html")')) {
+  console.error('/master.html is missing its browser redirect to /inherit.html');
   failed = true;
 } else {
-  console.log('/master.html: redirects to /inherit.html');
+  console.log('/master.html: browser redirect to /inherit.html present');
 }
 
 const masterEntries = (inheritHtml.match(/name: '/g) || []).length;
