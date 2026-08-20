@@ -61,23 +61,22 @@ export default {
     if (typeof message !== 'string' || !message.trim() || message.length > MAX_MESSAGE_CHARS) {
       return json({ error: 'Message must be a non-empty string under 1000 characters.' }, 400, headers);
     }
-    if (!env.SILICONFLOW_API_KEY) return json({ error: 'AI service is not configured.' }, 503, headers);
+    if (!env.MY_API) return json({ error: 'AI service is not configured.' }, 503, headers);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), MAX_TIMEOUT_MS);
     try {
-      const upstream = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+      const upstream = await fetch('https://apihub.agnes-ai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.SILICONFLOW_API_KEY },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.MY_API },
         body: JSON.stringify({
-          model: env.SILICONFLOW_MODEL || 'Qwen/Qwen3.5-4B',
+          model: env.MY_MODEL || 'agnes-2.0-flash',
           messages: [
             { role: 'system', content: '你是潮州木雕非遗数字人。请使用中文，基于可靠公开知识简洁回答；不确定时明确说明。' },
             { role: 'user', content: message.trim() },
           ],
-          // Qwen3.5 defaults to thinking mode, which is too slow for short public Q&A.
-          enable_thinking: false,
           max_tokens: 600,
+          temperature: 0.4,
         }),
         signal: controller.signal,
       });
