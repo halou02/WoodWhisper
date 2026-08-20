@@ -69,7 +69,7 @@
     </section>
 
     <!-- 对话消息区：flex:1 自动占满剩余空间 -->
-    <section class="chat" id="chatBox">
+    <section class="chat" id="chatBox" aria-live="polite" aria-busy="false">
       <!-- 欢迎语 + 话题引导卡（JS动态填充） -->
     </section>
 
@@ -97,7 +97,7 @@
       <input type="file" id="imageUpload" accept="image/*" style="display:none;">
 
       <!-- 文字输入框 -->
-      <input id="chatInput" class="ai-input-bar__text" type="text" placeholder="问点什么关于木雕的事...">
+      <input id="chatInput" class="ai-input-bar__text" type="text" inputmode="text" enterkeyhint="send" autocomplete="off" placeholder="问点什么关于木雕的事...">
 
       <!-- 右侧发送/语音切换按钮 -->
       <button id="voiceBtn" class="record-btn" aria-label="长按语音输入">
@@ -362,6 +362,7 @@
   const aiPrivacyConfirm = document.getElementById('aiPrivacyConfirm');
   const aiPrivacyCancel = document.getElementById('aiPrivacyCancel');
   let isSendMode = false;  // 当前按钮是否是发送模式（有文字时）
+  let isAiBusy = false;
 
 
   /* ============================================================
@@ -663,7 +664,7 @@
   // 发送文字消息
   function sendTextMessage() {
     const text = chatInput.value.trim();
-    if (!text) return;
+    if (!text || isAiBusy) return;
     requestAiPrivacyConsent(text);
   }
 
@@ -695,8 +696,24 @@
     chatInput.focus();
   });
 
+  aiPrivacyDialog.addEventListener('click', function(e) {
+    if (e.target === aiPrivacyDialog) aiPrivacyCancel.click();
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && aiPrivacyDialog.getAttribute('aria-hidden') === 'false') {
+      aiPrivacyCancel.click();
+    }
+  });
+
   // 用户首次发送前确认数据会交给 AI 服务处理；确认一次后仅保存在当前浏览器。
   function submitTextMessage(text) {
+    if (isAiBusy) return;
+    isAiBusy = true;
+    chatBox.setAttribute('aria-busy', 'true');
+    recordBtn.disabled = true;
+    chatInput.disabled = true;
+    imageBtn.disabled = true;
     // 隐藏话题卡片（如果还在）
     hideTopics();
     // 添加用户气泡
@@ -1002,7 +1019,9 @@
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        throw new Error('API 响应错误：HTTP ' + res.status);
+        const apiError = new Error('API 响应错误：HTTP ' + res.status);
+        apiError.status = res.status;
+        throw apiError;
       }
 
       const data = await res.json();
@@ -1035,9 +1054,22 @@
         return;
       }
 
+      if (err.status === 503) {
+        hideThinking(thinkingBubble, 'AI 服务还没有完成配置，请联系项目维护者。');
+        return;
+      }
+
       const fallback = '这个问题我暂时还未深入了解，不妨让我给您讲讲潮州木雕最经典的螃蟹篓镂空技法吧。匠人以整段香樟木层层镂通，雕出编织篾纹与穿篾而过的螃蟹，蟹足纤毫毕现，寓意八方来财、富甲一方。';
       hideThinking(thinkingBubble, fallback);
       speak(fallback);
+    } finally {
+      isAiBusy = false;
+      chatBox.setAttribute('aria-busy', 'false');
+      recordBtn.disabled = false;
+      chatInput.disabled = false;
+      imageBtn.disabled = false;
+      updateBtnMode();
+      chatInput.focus();
     }
   }
 
