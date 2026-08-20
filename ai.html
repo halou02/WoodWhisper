@@ -182,7 +182,7 @@
 
   <!--
     ============================================================
-    核心脚本区：语音识别 + DeepSeek API + TTS 朗读 + 张嘴动画 + 粒子系统
+    核心脚本区：语音识别 + AI 服务代理 + TTS 朗读 + 张嘴动画 + 粒子系统
     放在 </body> 前，确保上面 DOM 都加载完再执行。
     人话讲：先搭好舞台（HTML），再请演员（JS）登场，顺序反了会找不到元素。
     ============================================================
@@ -218,7 +218,7 @@
    *   2. 通过平台环境变量注入，前端请求 /.netlify/functions/proxy 转发
    * 部署时只需在平台环境变量中设置 AI_PROVIDER 和 SILICONFLOW_API_KEY。
    * ============================================================ */
-  // 部署到 EdgeOne Makers：改为调用同源边缘函数 /api/chat，真实 key 存在平台环境变量，永不进浏览器
+  // 生产环境调用 AI 代理，真实密钥只保存在服务端环境变量中。
   const AI_PROXY_URL = window.WOODWHISPER_AI_PROXY_URL || '/api/chat'; // 只保存代理地址，密钥在服务端
   const AI_PRIVACY_CONSENT_KEY = 'woodwhisper-ai-privacy-consent-v1';
   let pendingAiMessage = '';
@@ -579,7 +579,7 @@
       const text = (event.results[0][0].transcript || '').trim();
       // 只打印长度不打印内容，避免用户语音内容残留在控制台
       console.log('识别到文本长度：', text.length);
-      // 空内容直接友好提示并 return，别把空字符串发给 DeepSeek
+      // 空内容直接友好提示并 return，别把空字符串发给 AI 服务。
       if (!text) {
         addBubble('没听清内容，请再试一次。', 'ai');
         return;
@@ -713,7 +713,7 @@
     // 更新按钮状态
     updateBtnMode();
     // 调用AI
-    callDeepSeek(text);
+    callAiService(text);
   }
 
   // 开始录音
@@ -966,10 +966,10 @@
 
 
   /* ============================================================
-   * 【D 区】DeepSeek API 调用（重点）
+   * 【D 区】AI 服务调用（重点）
    * ------------------------------------------------------------
-   * 这一段在干什么：把用户问题 + 系统提示词打包发给 DeepSeek，拿回 AI 回复。
-   * 人话讲：fetch 就像"打电话"——你按号码（URL）、报身份（headers 带 key）、
+   * 这一段在干什么：把用户问题提交给安全代理，拿回 AI 回复。
+   * 人话讲：fetch 就像"打电话"——你按号码（URL）、
    *   说内容（body 里塞 messages），等对方回话（await res.json()）。
    * 什么是 API 调用：应用程序接口调用，让前端请求远端服务拿数据。
    *   人话讲：去窗口办事，按规范填表交材料，办事员给你回执。
@@ -977,9 +977,9 @@
    *   1. fetch 是异步的，必须 await，否则 data 是 Promise 不是数据；
    *   2. 返回结构在 data.reply，写错路径会拿到 undefined；
    *   3. 服务端未配置密钥时会返回 503，网络异常或超时时会进入本地兜底话术。
-   *   验证：F12 Network 查看 /api/chat 请求状态与响应体中的 reply 字段。
+   *   验证：Network 查看 AI 代理请求状态与响应体中的 reply 字段。
    * ============================================================ */
-  async function callDeepSeek(userText) {
+  async function callAiService(userText) {
     // 1. 先同步显示"思考中"气泡（确保DOM先渲染出来，不被任何异步逻辑跳过）
     const thinkingBubble = showThinking();
     console.log('[AI] 思考气泡已添加到DOM，isConnected=', thinkingBubble.isConnected);
@@ -991,16 +991,16 @@
     const MIN_THINKING_MS = 1200;
     const startTime = Date.now();
 
-    // AbortController + 15 秒超时
+    // 前端等待时间略长于 Worker 的上游超时，避免浏览器抢先中断请求。
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     try {
       const res = await fetch(AI_PROXY_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-          // 认证由边缘函数 /api/chat 在服务端用 DEEPSEEK_API_KEY 环境变量完成，浏览器不携带 key
+          // 认证由 Worker 在服务端完成，浏览器不携带 API Key。
         },
         body: JSON.stringify({ message: userText }),
         signal: controller.signal
@@ -1017,7 +1017,7 @@
       const data = await res.json();
 
       if (!data || typeof data.reply !== 'string') {
-        throw new Error('DeepSeek 返回数据结构异常');
+        throw new Error('AI 服务返回数据结构异常');
       }
       const aiReply = data.reply;
       if (typeof aiReply !== 'string' || !aiReply.trim()) {
@@ -1034,7 +1034,7 @@
 
     } catch (err) {
       clearTimeout(timeoutId);
-      console.warn('DeepSeek 调用失败：', err.name);
+      console.warn('AI 服务调用失败：', err.name);
 
       const elapsed3 = Date.now() - startTime;
       await new Promise(r => setTimeout(r, Math.max(0, MIN_THINKING_MS - elapsed3)));
