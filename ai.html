@@ -976,7 +976,8 @@
    * 新手易错点：
    *   1. fetch 是异步的，必须 await，否则 data 是 Promise 不是数据；
    *   2. 返回结构在 data.reply，写错路径会拿到 undefined；
-   *   3. 服务端未配置密钥时会返回 503，网络异常或超时时会进入本地兜底话术。
+   *   3. 服务端未配置密钥时会返回 503；网络异常或超时要如实提示，
+   *      不应用本地内容伪装成 AI 回答。
    *   验证：Network 查看 AI 代理请求状态与响应体中的 reply 字段。
    * ============================================================ */
   async function callAiService(userText) {
@@ -987,13 +988,13 @@
     // 强制浏览器重绘一帧，确保用户能看到思考气泡
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    // 未配置Key：直接使用本地回复（不发网络请求），但至少显示1.5秒思考状态
+    // 至少显示片刻思考状态，避免界面在极快响应时闪烁。
     const MIN_THINKING_MS = 1200;
     const startTime = Date.now();
 
     // 前端等待时间略长于 Worker 的上游超时，避免浏览器抢先中断请求。
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
       const res = await fetch(AI_PROXY_URL, {
@@ -1009,8 +1010,10 @@
       clearTimeout(timeoutId);
 
       if (!res.ok) {
+        const responseBody = await res.json().catch(() => ({}));
         const apiError = new Error('API 响应错误：HTTP ' + res.status);
         apiError.status = res.status;
+        apiError.upstreamStatus = responseBody.upstreamStatus;
         throw apiError;
       }
 
@@ -1049,9 +1052,8 @@
         return;
       }
 
-      const fallback = '这个问题我暂时还未深入了解，不妨让我给您讲讲潮州木雕最经典的螃蟹篓镂空技法吧。匠人以整段香樟木层层镂通，雕出编织篾纹与穿篾而过的螃蟹，蟹足纤毫毕现，寓意八方来财、富甲一方。';
-      hideThinking(thinkingBubble, fallback);
-      speak(fallback);
+      const detail = err.upstreamStatus ? '（上游服务状态 ' + err.upstreamStatus + '）' : '';
+      hideThinking(thinkingBubble, 'AI 服务暂时不可用，请稍后重试。' + detail);
     } finally {
       isAiBusy = false;
       chatBox.setAttribute('aria-busy', 'false');

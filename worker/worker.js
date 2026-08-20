@@ -1,7 +1,10 @@
 const MAX_REQUEST_BYTES = 4096;
 const MAX_MESSAGE_CHARS = 1000;
 const MAX_REPLY_CHARS = 2000;
-const MAX_TIMEOUT_MS = 20000;
+// Free-tier models can take longer during peak hours. Keep this below the
+// browser timeout so the client receives the Worker response rather than a
+// generic network abort.
+const MAX_TIMEOUT_MS = 55000;
 const RATE_LIMIT_WINDOW_MS = 60000;
 const RATE_LIMIT_MAX_REQUESTS = 12;
 const requestLog = new Map();
@@ -78,7 +81,12 @@ export default {
         }),
         signal: controller.signal,
       });
-      if (!upstream.ok) return json({ error: 'AI service is temporarily unavailable.' }, 502, headers);
+      if (!upstream.ok) {
+        return json({
+          error: 'AI upstream request failed.',
+          upstreamStatus: upstream.status,
+        }, 502, headers);
+      }
       const data = await upstream.json();
       const reply = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
       if (typeof reply !== 'string' || !reply.trim()) return json({ error: 'AI service returned an invalid response.' }, 502, headers);
