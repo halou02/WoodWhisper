@@ -10,8 +10,10 @@ const requiredFiles = [
   'master.html',
   'css/style.css',
   'css/ai.css',
+  'css/history.css',
   'js/common.js',
   'js/inherit-data.js',
+  'js/history-data.js',
   'functions/api/chat.js',
 ];
 const forbiddenPaths = [
@@ -23,6 +25,9 @@ const contentChecks = [
   ['inherit.html', 'js/inherit-data.js'],
   ['js/inherit-data.js', 'portrait: false'],
   ['history.html', "'assets/images/history/optimized/'"],
+  ['history.html', 'css/history.css'],
+  ['history.html', 'js/history-data.js'],
+  ['js/history-data.js', 'const DYNASTIES = ['],
   ['ai.html', "const AI_PROXY_URL = '/api/chat'"],
   ['ai.html', 'css/ai.css'],
   ['master.html', 'window.location.replace("inherit.html")'],
