@@ -1682,4 +1682,16 @@ button {
   .inherit-particles {
     display: none !important;
   }
+
+  .jiangyu-floating__item,
+  .ai-avatar-glow,
+  .ai-avatar,
+  .ai-topics,
+  .chat__bubble,
+  .thinking-dots,
+  .record-btn__ripple,
+  .inherit-card--glow,
+  .ring-particle {
+    animation: none !important;
+  }
 }
