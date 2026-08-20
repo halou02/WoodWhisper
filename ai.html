@@ -1037,7 +1037,7 @@
 
     } catch (err) {
       clearTimeout(timeoutId);
-      console.warn('AI 服务调用失败：', err.name);
+      console.warn('AI 服务调用失败：', err.name, err.message);
 
       const elapsed3 = Date.now() - startTime;
       await new Promise(r => setTimeout(r, Math.max(0, MIN_THINKING_MS - elapsed3)));

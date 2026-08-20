@@ -26,9 +26,13 @@ function isAllowedOrigin(request, env) {
   return Boolean(origin && allowed && origin === allowed);
 }
 
-function corsHeaders(request) {
+function corsHeaders(env) {
+  const allowed = String(env.ALLOWED_ORIGIN || '').trim();
   return {
-    'Access-Control-Allow-Origin': request.headers.get('Origin'),
+    // Use the configured site origin explicitly. Returning the request Origin
+    // can leave a browser preflight without a valid CORS response when a
+    // platform normalizes or omits that request header.
+    'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Vary': 'Origin',
@@ -47,10 +51,10 @@ function withinRateLimit(request) {
 
 export default {
   async fetch(request, env) {
-    const headers = isAllowedOrigin(request, env) ? corsHeaders(request) : {};
+    const headers = corsHeaders(env);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405, Object.assign({ Allow: 'POST, OPTIONS' }, headers));
-    if (!isAllowedOrigin(request, env)) return json({ error: 'Origin not allowed.' }, 403);
+    if (!isAllowedOrigin(request, env)) return json({ error: 'Origin not allowed.' }, 403, headers);
     if (!withinRateLimit(request)) return json({ error: 'Too many requests. Please try again later.' }, 429, headers);
 
     const contentLength = Number(request.headers.get('content-length') || 0);
