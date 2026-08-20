@@ -189,13 +189,30 @@
   -->
   <script>
   /* ============================================================
-   * 【A 区】AI 服务配置（安全代理）
+   * 【A 区】AI 服务配置（Agnes AI 直连）
    * ============================================================
-   * 浏览器只请求 Cloudflare Worker 代理，不保存或传输 API Key。
-   * Worker 从自己的机密变量读取 Agnes API Key，并负责限流与上游请求。
-   * 发布前只需确认 js/ai-config.js 中的 Worker 地址正确。
+   * ▶ 在哪里填 API Key（最重要的看这里）：
+   *   往下找这一行：const AGNES_API_KEY = '这里换成你的 key';
+   *   把引号中间的占位内容换成你的 key（单引号保留！只换中间内容）
+   *
+   * ▶ Key 怎么申请：
+   *   打开 https://platform.agnes-ai.com 注册登录 → 创建测试 Key（sk- 开头）
+   *   → 复制 → 粘贴到下面 AGNES_API_KEY 的引号中间。
+   *
+   * ▶ 模型：agnes-2.0-flash（免费、限流，适合测试）
+   *
+   * 【安全警告】前端直连 = Key 明文写在 HTML 里，
+   *   任何人按 F12 → Sources → ai.html 都能看到你的 Key。
+   *   人话讲：测试号免费限流随便用；正式公网发布必须换回服务端代理。
+   *
+   * 【新手易错点】
+   *   1. Key 填错 → 会收到"API Key 无效"提示（HTTP 401）；
+   *   2. Key 只填引号中间，单引号别删，删了整文件白屏；
+   *   3. 跨域(CORS)：若 Console 红字 CORS 报错，需换回代理方案。
    * ============================================================ */
-  const AI_PROXY_URL = window.WOODWHISPER_AI_PROXY_URL;
+  const AGNES_API_URL = 'https://apihub.agnes-ai.com/v1/chat/completions'; // Agnes 接口地址，不用改
+  const AGNES_MODEL = 'agnes-2.0-flash'; // 模型名，不用改
+  const AGNES_API_KEY = 'sk-xl7ycVTmAxRfChyoGslm6d73UVijy3cnJRErQ4jnL7c7o6lv'; // ← 你的真实测试 key 填这里！单引号保留
   const AI_PRIVACY_CONSENT_KEY = 'woodwhisper-ai-privacy-consent-v1';
   let pendingAiMessage = '';
 
