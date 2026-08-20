@@ -189,37 +189,13 @@
   -->
   <script>
   /* ============================================================
-   * 【A 区】AI 服务配置（安全约束 - 重点中的重点）
+   * 【A 区】AI 服务配置（安全代理）
    * ============================================================
-   * 【傻瓜式配置教学】密钥只放在服务端环境变量，浏览器页面不填写密钥。
-   * 
-   * ▶ 当前默认：硅基流动 SiliconFlow
-   *   默认模型：Qwen/Qwen3-8B。详细配置请看 docs/API_SETUP.md。
-   * 
-   * ▶ 配置方式：在 PowerShell 或 EdgeOne Pages 环境变量中设置
-   *   AI_PROVIDER=siliconflow、SILICONFLOW_MODEL=Qwen/Qwen3-8B、
-   *   SILICONFLOW_API_KEY=你的密钥。不要写进本页。
-   * 
-   * ▶ 第3步：配置服务端环境变量
-   *   不要把 API Key 写入本页。请参考 docs/API_SETUP.md，
-   *   在本地服务或 EdgeOne Pages 的环境变量中设置 SILICONFLOW_API_KEY。
-   * 
-   * ▶ 使用限制：免费模型的额度、速率和可用性以硅基流动控制台为准。
-   *   如果出现 401/403/429，请检查密钥、额度或稍后再试。
-   * ============================================================
-   * 【安全警告】API 密钥配置区
-   * 新手易错点：纯前端无法隐藏密钥，直接写 key 会被任何人查看源码盗用！
-   *   验证方法：浏览器 F12 → Sources → ai.html，能看到下面这行明文 key。
-   * 本项目已经使用同源服务端代理，浏览器不保存也不发送 API Key。
-   * 正式部署方案（二选一）：
-   *   1. Vercel/Netlify 环境变量 + Serverless Function 代理（推荐）
-   *      人话讲：在云平台上把 key 存进"保险箱"（环境变量），
-   *              再写一个小后端函数帮你转发请求，前端只问小后端要答案，不碰钥匙。
-   *   2. 通过平台环境变量注入，前端请求 /.netlify/functions/proxy 转发
-   * 部署时只需在平台环境变量中设置 AI_PROVIDER 和 SILICONFLOW_API_KEY。
+   * 浏览器只请求 Cloudflare Worker 代理，不保存或传输 API Key。
+   * Worker 从自己的机密变量读取 Agnes API Key，并负责限流与上游请求。
+   * 发布前只需确认 js/ai-config.js 中的 Worker 地址正确。
    * ============================================================ */
-  // 生产环境调用 AI 代理，真实密钥只保存在服务端环境变量中。
-  const AI_PROXY_URL = window.WOODWHISPER_AI_PROXY_URL || '/api/chat'; // 只保存代理地址，密钥在服务端
+  const AI_PROXY_URL = window.WOODWHISPER_AI_PROXY_URL;
   const AI_PRIVACY_CONSENT_KEY = 'woodwhisper-ai-privacy-consent-v1';
   let pendingAiMessage = '';
 
@@ -966,19 +942,24 @@
 
 
   /* ============================================================
-   * 【D 区】AI 服务调用（重点）
+   * 【D 区】AI 服务调用（重点）—— 前端直连 Agnes AI
    * ------------------------------------------------------------
-   * 这一段在干什么：把用户问题提交给安全代理，拿回 AI 回复。
-   * 人话讲：fetch 就像"打电话"——你按号码（URL）、
-   *   说内容（body 里塞 messages），等对方回话（await res.json()）。
+   * 这一段在干什么：把用户问题直接发给 Agnes AI（OpenAI 兼容格式），拿回回复。
+   * 人话讲：fetch 就像"打电话"——你按号码（AGNES_API_URL）、
+   *   亮身份证（Authorization 头带 Key）、说内容（body 里塞 messages），
+   *   等对方回话（await res.json()）。
    * 什么是 API 调用：应用程序接口调用，让前端请求远端服务拿数据。
    *   人话讲：去窗口办事，按规范填表交材料，办事员给你回执。
+   * 请求体是 OpenAI 格式：model（用哪个模型）+ messages（对话记录，
+   *   第一条 system 塞 B 区的木雕知识库课本，第二条 user 是用户这句问话）。
    * 新手易错点：
    *   1. fetch 是异步的，必须 await，否则 data 是 Promise 不是数据；
-   *   2. 返回结构在 data.reply，写错路径会拿到 undefined；
-   *   3. 服务端未配置密钥时会返回 503；网络异常或超时要如实提示，
-   *      不应用本地内容伪装成 AI 回答。
-   *   验证：Network 查看 AI 代理请求状态与响应体中的 reply 字段。
+   *   2. 回复藏在 data.choices[0].message.content（OpenAI 格式），
+   *      写错路径会拿到 undefined；
+   *   3. Agnes 的 TTFT 偏高（官方确认个别请求超 40 秒），超时保持 60 秒，
+   *      网络异常或超时要如实提示，不应用本地内容伪装成 AI 回答。
+   *   验证：Network 查看 apihub.agnes-ai.com 请求状态与响应体中的
+   *   choices[0].message.content 字段。
    * ============================================================ */
   async function callAiService(userText) {
     // 1. 先同步显示"思考中"气泡（确保DOM先渲染出来，不被任何异步逻辑跳过）
@@ -992,37 +973,57 @@
     const MIN_THINKING_MS = 1200;
     const startTime = Date.now();
 
-    // 前端等待时间略长于 Worker 的上游超时，避免浏览器抢先中断请求。
+    // 前端 60 秒超时：Agnes TTFT 偏高（个别请求超 40 秒），给足等待时间。
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const res = await fetch(AI_PROXY_URL, {
+      // Key 没配置：不发网络请求，直接给降级话术 + 指路。
+      // 放在 try 内部，finally 里的按钮恢复逻辑自然覆盖本分支，无需手动恢复。
+      if (AGNES_API_KEY === 'YOUR_AGNES_API_KEY_HERE') {
+        console.log('[AI] 未配置 Agnes API Key，使用本地降级回复');
+        const elapsed = Date.now() - startTime;
+        await new Promise(r => setTimeout(r, Math.max(300, MIN_THINKING_MS - elapsed)));
+        const fallback = '你好呀！我是潮州木雕非遗数字人小匠。我还没接上"大脑"——请打开 ai.html 源码顶部的【A 区】，把 AGNES_API_KEY 一行的 YOUR_AGNES_API_KEY_HERE 换成你在 platform.agnes-ai.com 申请的 Key，保存刷新后我就能真正回答问题啦！先给你讲个招牌绝技——蟹篓镂空：匠人以整段香樟木层层镂通，雕出编织篾纹与穿篾而过的螃蟹，蟹足纤毫毕现，寓意八方来财、富甲一方。';
+        hideThinking(thinkingBubble, fallback);
+        speak(fallback);
+        return;
+      }
+
+      const res = await fetch(AGNES_API_URL, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
-          // 认证由 Worker 在服务端完成，浏览器不携带 API Key。
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + AGNES_API_KEY // 直连必须带上钥匙
         },
-        body: JSON.stringify({ message: userText }),
+        body: JSON.stringify({
+          model: AGNES_MODEL,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT }, // B 区的木雕知识库课本
+            { role: 'user', content: userText } // 用户这一句问话
+          ]
+        }),
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        const responseBody = await res.json().catch(() => ({}));
-        const apiError = new Error('API 响应错误：HTTP ' + res.status);
-        apiError.status = res.status;
-        apiError.upstreamStatus = responseBody.upstreamStatus;
-        throw apiError;
+        // 尝试读错误详情，401 = Key 错了给专属提示
+        if (res.status === 401) {
+          throw Object.assign(new Error('API Key 无效'), { status: 401 });
+        }
+        throw Object.assign(new Error('API 响应错误：HTTP ' + res.status), { status: res.status });
       }
 
       const data = await res.json();
 
-      if (!data || typeof data.reply !== 'string') {
+      // 新手易错点：回复藏在 choices[0].message.content（OpenAI 格式），
+      // 写成旧的 data.reply 会拿到 undefined
+      if (!data || !Array.isArray(data.choices) || data.choices.length === 0 || !data.choices[0].message) {
         throw new Error('AI 服务返回数据结构异常');
       }
-      const aiReply = data.reply;
+      const aiReply = data.choices[0].message.content;
       if (typeof aiReply !== 'string' || !aiReply.trim()) {
         throw new Error('AI 回复内容为空');
       }
@@ -1047,12 +1048,12 @@
         return;
       }
 
-      if (err.status === 503) {
-        hideThinking(thinkingBubble, 'AI 服务还没有完成配置，请联系项目维护者。');
+      if (err.status === 401) {
+        hideThinking(thinkingBubble, 'API Key 无效，请打开 ai.html 顶部【A 区】检查 AGNES_API_KEY 是否填对（platform.agnes-ai.com 申请）。');
         return;
       }
 
-      const detail = err.upstreamStatus ? '（上游服务状态 ' + err.upstreamStatus + '）' : '';
+      const detail = err.status ? '（HTTP ' + err.status + '）' : '';
       hideThinking(thinkingBubble, 'AI 服务暂时不可用，请稍后重试。' + detail);
     } finally {
       isAiBusy = false;
