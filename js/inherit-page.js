@@ -16,6 +16,7 @@
     var parallaxTicking = false; // rAF 节流标记：视差滚动
     var lastScrollY = 0;
     var particleSpawnAccumulator = 0;
+    var lastJiangyuTrigger = null;
 
     // ===== 【DOM 引用】预先抓取，避免重复查询 =====
     var page = document.getElementById('inheritPage');
@@ -636,6 +637,7 @@
       setRingState('start');
       ringModal.classList.add('inherit-ring-modal--open');
       ringModal.setAttribute('aria-hidden', 'false');
+      ringClose.focus();
       // 禁止背景页面滚动
       document.body.style.overflow = 'hidden';
       // 绑定Esc键关闭
@@ -1447,9 +1449,12 @@
     // 打开匠语漫行模态
     // 人话讲：显示模态，禁止页面滚动，开始飘字
     function openJiangyuModal() {
+      lastJiangyuTrigger = document.activeElement;
       jiangyuModal.classList.add('visible');
       jiangyuModal.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
+      jiangyuClose.focus();
+      document.addEventListener('keydown', onJiangyuEscClose);
       startFloatingTexts();
     }
 
@@ -1460,8 +1465,16 @@
       jiangyuModal.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
       stopFloatingTexts();
+      document.removeEventListener('keydown', onJiangyuEscClose);
       jiangyuBlessing.classList.remove('visible');
       jiangyuBlessing.setAttribute('aria-hidden', 'true');
+      if (lastJiangyuTrigger && typeof lastJiangyuTrigger.focus === 'function') lastJiangyuTrigger.focus();
+    }
+
+    function onJiangyuEscClose(e) {
+      if (e.key === 'Escape' && jiangyuModal.classList.contains('visible')) {
+        closeJiangyuModal();
+      }
     }
 
     // 开始飘字动画（轨道制版）
