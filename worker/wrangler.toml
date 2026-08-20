@@ -4,4 +4,4 @@ compatibility_date = "2026-08-20"
 
 [vars]
 ALLOWED_ORIGIN = "https://YOUR_GITHUB_USERNAME.github.io"
-SILICONFLOW_MODEL = "Qwen/Qwen3-8B"
+SILICONFLOW_MODEL = "Qwen/Qwen3.5-4B"

@@ -67,12 +67,14 @@ export default {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.SILICONFLOW_API_KEY },
         body: JSON.stringify({
-          model: env.SILICONFLOW_MODEL || 'Qwen/Qwen3-8B',
+          model: env.SILICONFLOW_MODEL || 'Qwen/Qwen3.5-4B',
           messages: [
             { role: 'system', content: '你是潮州木雕非遗数字人。请使用中文，基于可靠公开知识简洁回答；不确定时明确说明。' },
             { role: 'user', content: message.trim() },
           ],
-          max_tokens: 500,
+          // Qwen3.5 defaults to thinking mode, which is too slow for short public Q&A.
+          enable_thinking: false,
+          max_tokens: 600,
         }),
         signal: controller.signal,
       });
