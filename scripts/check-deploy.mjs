@@ -13,6 +13,7 @@ const requiredFiles = [
   'css/history.css',
   'css/inherit.css',
   'js/common.js',
+  'js/ai-config.js',
   'js/inherit-data.js',
   'js/inherit-page.js',
   'js/history-data.js',
@@ -32,7 +33,8 @@ const contentChecks = [
   ['history.html', 'css/history.css'],
   ['history.html', 'js/history-data.js'],
   ['js/history-data.js', 'const DYNASTIES = ['],
-  ['ai.html', "const AI_PROXY_URL = '/api/chat'"],
+  ['ai.html', 'const AI_PROXY_URL = window.WOODWHISPER_AI_PROXY_URL'],
+  ['js/ai-config.js', 'WOODWHISPER_AI_PROXY_URL'],
   ['ai.html', 'css/ai.css'],
   ['master.html', 'window.location.replace("inherit.html")'],
 ];
