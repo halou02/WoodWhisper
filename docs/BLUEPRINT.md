@@ -18,6 +18,7 @@ WoodWhisper/
 ├── css/style.css              全站共享样式与响应式规则
 ├── css/ai.css                 AI 页专属样式
 ├── css/history.css            历史页专属样式
+├── css/inherit.css            传承页专属样式
 ├── js/common.js               escapeHtml、safeColor 等公共工具
 ├── js/inherit-data.js         18 位传承人资料（独立维护）
 ├── js/history-data.js         五朝代历史资料（独立维护）
@@ -39,6 +40,7 @@ WoodWhisper/
 - `inherit.html`：当前主导航的“传承”页面。人物资料维护在 `js/inherit-data.js`；没有公开肖像的传承人使用文字占位，不请求不存在的照片。
 - `ai.html`：页面专属视觉规则维护在 `css/ai.css`，公共颜色、导航和无障碍规则仍使用 `css/style.css`。
 - `history.html`：朝代资料维护在 `js/history-data.js`，页面脚本只负责渲染和交互；专属视觉规则维护在 `css/history.css`。
+- `inherit.html`：人物资料维护在 `js/inherit-data.js`，页面专属视觉规则维护在 `css/inherit.css`；复杂交互仍由页面脚本负责。
 - `ai.html`：首次提交问题前提示用户对话会交给 AI 服务处理；前端只请求同源 `/api/chat`。
 - `master.html`：兼容旧链接的跳转页，自动进入正式的 `inherit.html`，不再维护第二套人物资料。
 

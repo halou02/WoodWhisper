@@ -11,6 +11,7 @@ const requiredFiles = [
   'css/style.css',
   'css/ai.css',
   'css/history.css',
+  'css/inherit.css',
   'js/common.js',
   'js/inherit-data.js',
   'js/history-data.js',
@@ -23,6 +24,7 @@ const forbiddenPaths = [
 ];
 const contentChecks = [
   ['inherit.html', 'js/inherit-data.js'],
+  ['inherit.html', 'css/inherit.css'],
   ['js/inherit-data.js', 'portrait: false'],
   ['history.html', "'assets/images/history/optimized/'"],
   ['history.html', 'css/history.css'],

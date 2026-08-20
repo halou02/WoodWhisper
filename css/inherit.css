@@ -1,0 +1,1824 @@
+/* 传承页专属样式，由 inherit.html 拆分；保持原有视觉、动画与响应式规则。 */
+
+  <style>
+    /* ============================================================
+     * 传承页专属样式（v2 重设计版）
+     * 这一段在干什么：
+     *   定义传承页的黑金双模式变量、匠人卡片错落布局、
+     *   固定金线标注、年轮弹窗、木屑粒子等所有模块的样式。
+     *   相比 v1：移除了视差层样式，新增了固定标注/金线样式，
+     *   重写了卡片焦点态和按钮样式。
+     * ============================================================ */
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+    /* 夜间模式：宽屏两侧黑边；日间模式：宽屏两侧宣纸色 */
+    body.dark { background: #000; }
+    body:not(.dark) { background: #f0e8d8; }
+
+    /* ===== 1. CSS 变量：日间 / 夜间两套配色 =====
+     * 人话讲：就像给页面准备了两套"颜料盒"，
+     *   默认（夜间）是深色木纹 + 鎏金文字，
+     *   切到日间就换成宣纸米白 + 深木色文字。
+     *   所有颜色都通过变量引用，切换时只改一个类名。
+     */
+    :root {
+      --inherit-bg: #1a1209;
+      --inherit-text: #c8a466;
+      --inherit-text-secondary: #a08050;
+      --inherit-card-bg: #2a1f14;
+      --inherit-card-border: #c8a466;
+      --inherit-btn-bg: rgba(200,164,102,0.15);
+      --inherit-btn-border: #c8a466;
+      --inherit-btn-text: #c8a466;
+      --inherit-scroll-bg: #3a2a1a;
+    }
+
+    /* 日间模式变量：当 .inherit-page 没有 .dark 类时生效 */
+    .inherit-page:not(.dark) {
+      --inherit-bg: #f8f5ed;
+      --inherit-text: #4a3829;
+      --inherit-text-secondary: #8a7b6e;
+      --inherit-card-bg: #ede5d5;
+      --inherit-card-border: #c8a466;
+      --inherit-btn-bg: rgba(74,56,41,0.1);
+      --inherit-btn-border: #4a3829;
+      --inherit-btn-text: #4a3829;
+      --inherit-scroll-bg: #e0d8c8;
+    }
+
+    /* ===== 2. 页面根容器 =====
+     * 在干什么：铺满整屏，铺合成背景图（长卷+纹理合成），设好底部导航留白。
+     * 数据从哪来：背景图 inherit_composite_bg_clean_from_screenshot.jpg 是整页底层，
+     *   center top / cover no-repeat fixed 表示居中顶部对齐、覆盖整屏、不平铺、相对视口固定。
+     *
+     * 新手易错点：
+     *   - background 简写里 fixed 表示背景相对视口固定，不随页面滚动。
+     *   - 如果图片路径错了（404），页面会显示兜底色 #1a1209，不会白屏。
+     *   - cover 会等比缩放图片填满容器，可能裁切边缘，但不会变形。
+     *   验证：F12 Network 面板应看到 inherit_composite_bg_clean_from_screenshot.jpg 返回 200 OK；
+     *         滚动页面时背景图不动。
+     */
+    .inherit-page {
+      min-height: 100vh;
+      /* 9:16竖屏比例锁定：宽度 = 视口高度 × 9/16，保证手机竖屏沉浸体验 */
+      max-width: calc(100vh * 9 / 16);
+      margin: 0 auto;
+      width: 100%;
+      box-sizing: border-box;
+      /* 夜间模式：合成背景图（长卷+纹理），fixed 不随内容滚动 */
+      background: url('assets/images/inherit/inherit_composite_bg_clean_from_screenshot.jpg') center top / cover no-repeat fixed;
+      background-color: var(--inherit-bg); /* 兜底色，图片加载前显示 */
+      position: relative;
+      overflow-x: hidden;
+      /* 底部留出导航栏高度 + 刘海安全区 */
+      padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+      /* 颜色切换 0.4s 平滑过渡 */
+      transition: color 0.4s ease;
+    }
+
+    /* ===== 2.1 日间模式遮罩 =====
+     * 在干什么：日间模式时，在根容器上叠一层宣纸米白半透明遮罩，
+     *   让合成背景图（含长卷）隐约可见，但整体色调变浅为米白。
+     *   用 ::after 伪元素实现，不增加额外 DOM 节点。
+     *
+     * 新手易错点：
+     *   - position:fixed 让遮罩相对视口固定，不随内容滚动。
+     *   - pointer-events:none 确保遮罩不拦截下层的点击/滑动事件。
+     *   - z-index:0 让遮罩在最底层，内容区 z-index≥1 的元素自然浮在上面。
+     *   - opacity 从 0.88 改为 0.85，让长卷背景多透出来一点，可见性更好。
+     *   验证：切到日间模式，背景中的长卷纹理应隐约可见，不是一片纯白。
+     */
+    .inherit-page::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: #f8f5ed;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    /* 日间模式（没有 .dark 类）：遮罩 opacity 改为 0.85（保留长卷可见性） */
+    .inherit-page:not(.dark)::after {
+      opacity: 0.85;
+    }
+
+    /* ===== 3. 固定顶部控件 =====
+     * 在干什么：右上角月亮 + 音符两个圆形按钮，固定不随页面滚动。
+     * 样式完全复制 history.html 的 .history-header__btn 风格。
+     * z-index 最高（900），确保永远浮在最上层。
+     */
+    .inherit-top-controls {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 900;
+      display: flex;
+      gap: 10px;
+    }
+
+    .inherit-top-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid rgba(200,164,102,0.4);
+      background: rgba(42,31,20,0.6);
+      color: var(--inherit-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 日间模式按钮底色调整 */
+    .inherit-page:not(.dark) .inherit-top-btn {
+      background: rgba(255,255,255,0.6);
+      border-color: rgba(200,164,102,0.3);
+      color: #4a3829;
+    }
+
+    .inherit-top-btn:active {
+      transform: scale(0.92);
+    }
+
+    .inherit-top-btn svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* ===== 4. 页面顶部标题区 =====
+     * 在干什么：左上角渲染"传承"主标题 + 副标题，CSS 文字渲染。
+     *   鎏金色 serif 字体，不合并到背景图。
+     *   padding 改为 56px 20px 16px（顶部缩小，更紧凑）。
+     *
+     * 新手易错点：
+     *   - text-shadow 用多层投影模拟发光效果，让文字在复杂背景上更清晰可读。
+     *   - z-index:10 确保标题在遮罩层（z-index:0）之上。
+     *   验证：标题文字有柔和的黑色投影，在任何背景下都清晰不糊。
+     */
+    .inherit-title-area {
+      padding: 24px 20px 4px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .inherit-title {
+      font-family: serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      letter-spacing: 0.1em;
+      margin: 0;
+      transition: color 0.4s ease;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+
+    .inherit-subtitle {
+      font-family: serif;
+      font-size: 14px;
+      color: var(--inherit-text);
+      letter-spacing: 0.2em;
+      margin: 4px 0 0;
+      opacity: 0.8;
+      transition: color 0.4s ease;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+
+    /* 页头资料来源注释小字
+       在干什么：在副标题下方加一行很小的灰色注释文字，说明资料来源，
+       字号比副标题更小，透明度更低，不抢标题视觉焦点 */
+    .inherit-note {
+      font-family: serif;
+      font-size: 10px;
+      color: var(--inherit-text);
+      letter-spacing: 0.05em;
+      margin: 6px 0 0;
+      opacity: 0.5;
+      transition: color 0.4s ease;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+      line-height: 1.4;
+    }
+
+    /* ===== 5. 横向滚动匠人卡片容器 =====
+     * 在干什么：4 张匠人卡片横向排列，支持手指左右滑动。
+     *   关键三件套：overflow-x:auto + scroll-snap + -webkit-overflow-scrolling:touch
+     *   v2 更新：卡片宽度缩小到 130px，gap 改为 10px，padding 改为左右对称
+     *   让边缘卡片可以滚动到正中间；margin-top:22vh 把卡片推到页面中下部叠在长卷背景上。
+     *
+     * 新手易错点：
+     *   - 必须同时给 scroll-snap-type 和每张卡片的 scroll-snap-align，否则不会"吸附"。
+     *   - padding: 10px calc(50vw - 65px) 的意思是：上下 10px，左右各留"视口一半宽度减去卡片一半宽度(65px)"，
+     *     这样最左边和最右边的卡片也能被滚动到视口正中央。
+     *   - 手势区分：横向滑卡片时不能阻止竖向滚动页面。
+     *   验证方法：手机上左右滑卡片 → 再上下滚页面，两个方向互不干扰；
+     *             第一张和最后一张卡片都能居中显示；卡片位于屏幕中部偏下。
+     */
+    .inherit-cards-section {
+      position: relative;
+      z-index: 10;
+      padding: 6px 0 8px;
+      margin-top: 3vh;
+    }
+
+    .inherit-cards-scroll {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      padding: 5px calc(50% - 58px);
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      overscroll-behavior-x: contain;
+      touch-action: pan-x;
+    }
+
+    /* 手势方向判定为纵向时，临时禁止横向滚动，避免竖滑页面时卡片误动 */
+    .inherit-cards-scroll--lock-x {
+      overflow-x: hidden !important;
+      scroll-snap-type: none !important;
+    }
+
+    /* 无限循环跳转瞬间禁用snap，防止snap把跳转位置吸附回去 */
+
+    .inherit-cards-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* ===== 5.1 单张匠人卡片（默认非焦点态） =====
+     * 在干什么：非居中卡片缩小到 0.94 倍并微微上移，形成错落效果。
+     *   v2 更新：宽度从 160px 改为 130px；非 featured 卡片默认 transform 缩小上移。
+     *
+     * 新手易错点：
+     *   - flex: 0 0 130px 意思是不伸缩、基础宽度 130px，所有卡片等宽。
+     *   - scroll-snap-align: center 让卡片吸附到容器中心，配合容器 padding 实现居中。
+     *   - transition 同时监听 transform 和 box-shadow，让焦点切换动画平滑。
+     *   验证：页面加载后，非中间的卡片应比中间卡片小一圈，位置略微靠上。
+     */
+    /* 初始化期间禁用心跳动画，避免首帧布局抖动
+     * 人话讲：页面刚加载时，我们先让卡片"跳"到正确的焦点状态（无过渡），
+     *   等布局稳定后再启用过渡动画。如果一上来就开着过渡，
+     *   浏览器在处理 scroll-snap 滚动时可能让动画"卡住"不动。 */
+    .inherit-cards-scroll.inherit-cards-scroll--init .inherit-card {
+      transition: none !important;
+    }
+
+    .inherit-card {
+      flex: 0 0 116px;
+      scroll-snap-align: center;
+      border: 2px solid var(--inherit-card-border);
+      border-radius: 12px;
+      background: var(--inherit-card-bg);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.35s ease, filter 0.4s ease;
+      position: relative;
+      transform: translateY(-2px) scale(0.95);
+      filter: brightness(0.88);
+    }
+
+    .inherit-card:active:not(.inherit-card--featured) {
+      transform: scale(0.92) translateY(-1px);
+    }
+
+    /* ===== 5.2 焦点卡片（居中那张）=====
+     * 在干什么：当前滚动到视口中央的卡片会加上 .inherit-card--featured 类，
+     *   放大 1.12 倍、下移 18px、加明亮阴影、亮度拉满，形成"凸出来"的焦点效果。
+     *   非焦点卡片缩小到 0.86 倍、上移 12px、压暗到 0.75 亮度。
+     *   大小差 0.26 倍（26%）、高度差 30px，形成明显的菱形/V形错落。
+     *
+     * 新手易错点：
+     *   - z-index:3 必须比非焦点卡片高，否则放大后的卡片会被旁边卡片遮挡。
+     *   - translateY(18px) 让焦点卡片比非焦点卡片低 30px（18 - (-12) = 30px 差距）。
+     *   - filter:brightness(1) 恢复正常亮度，非焦点卡片 brightness(0.75) 压暗，
+     *     通过明暗对比进一步突出焦点卡片。
+     *   - box-shadow 用多层阴影制造悬浮立体感。
+     *   验证：居中卡片明显比旁边卡片大、亮、低；旁边卡片小、暗、高；形成菱形布局。
+     */
+    .inherit-card--featured {
+      transform: scale(1.03) translateY(2px) !important;
+      z-index: 3;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 15px rgba(200,164,102,0.2), inset 0 0 0 1px rgba(200,164,102,0.3) !important;
+      filter: brightness(1) !important;
+      border-color: #d4b072;
+    }
+
+    /* 焦点卡片按下态：保持大尺寸但略微缩小，模拟按压
+     * 注意：此规则必须在 .inherit-card--featured 之后，确保 !important 优先级正确 */
+    .inherit-card--featured:active {
+      transform: scale(1.02) translateY(8px) !important;
+    }
+
+    /* ===== 5.3 卡片图片区域 =====
+     * 在干什么：4:5 比例，object-fit:cover 居中裁切。
+     *   v2 新增：::after 伪元素加内阴影暗角，让图片四周自然暗下去，
+     *   突出中心人物，视觉上更有聚光感。
+     *
+     * 新手易错点：
+     *   - ::after 伪元素必须设 content:'' 才会显示，哪怕不需要内容。
+     *   - inset:0 等于 top:0;right:0;bottom:0;left:0，铺满父容器。
+     *   - pointer-events:none 让暗角层不拦截图片上的点击事件。
+     *   - box-shadow: inset ... 内阴影，从边缘向内投射，制造暗角。
+     *   验证：卡片图片的四个角和边缘应比中心略暗，像老照片的暗角效果。
+     */
+    .inherit-card__img-wrap {
+      aspect-ratio: 4 / 5;
+      overflow: hidden;
+      position: relative;
+      background: var(--inherit-scroll-bg);
+    }
+
+    .inherit-card__img-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.4);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .inherit-card__img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+      display: block;
+      transition: opacity 0.3s ease;
+    }
+
+    /* 图片加载失败的占位：显示匠人姓氏首字 */
+    .inherit-card__placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: serif;
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      background: var(--inherit-scroll-bg);
+    }
+
+    /* ===== 5.3b 卡片右下角印章（长按触发小故事彩蛋）=====
+     * 在干什么：每张卡片右下角盖一枚朱砂红小印章，印匠人姓氏。
+     *   既是国风装饰，也是长按交互的视觉提示——长按印章弹出冷门小故事。
+     *
+     * 人话讲：就像真实字画作品角落的作者印章，红色小方块盖在照片右下角，
+     *   上面写匠人姓氏。长按它=解锁彩蛋。
+     *
+     * 新手易错点：
+     *   - 印章元素设 56px（非焦点卡片 scale(0.86) 后有效触控区约 48px，满足要求）。
+     *   - 内部红色方块 30px，缩放后视觉约 26px，比例协调。
+     *   - 不能用 ::after 扩展热区，因为父级 img-wrap 有 overflow:hidden 会裁掉溢出部分。
+     *   - z-index:3 确保印章浮在暗角层和信息区之上。
+     *   验证：每张卡片右下角有红色小方章，印章内有白色姓氏字，手指长按 1.5 秒弹出小故事气泡。
+     */
+    .inherit-card__seal {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3;
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8f5ed;
+      line-height: 1;
+    }
+
+    /* 印章内部红色方块（视觉层 30px，居中在 56px 触控区内）*/
+    .inherit-card__seal::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 30px;
+      height: 30px;
+      background: #9c2424;
+      border-radius: 3px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.1);
+      transform: translate(-50%, -50%);
+      z-index: -1;
+    }
+
+    /* 焦点卡片上的印章红色方块：稍微放大匹配焦点卡片的放大态 */
+    .inherit-card--featured .inherit-card__seal::before {
+      transform: translate(-50%, -50%) scale(1.05);
+    }
+
+    /* ===== 5.4 卡片底部信息区 =====
+     * 在干什么：显示匠人的名字和标签，v2 改为深色渐变背景，
+     *   让底部信息和图片区更有层次感，不"飘"。
+     *   夜间模式：深棕色渐变（从半透明到几乎不透明）。
+     *
+     * 新手易错点：
+     *   - position:relative; z-index:1 确保信息区浮在暗角层（img-wrap::after 的 z-index:1）之上，
+     *     不被暗角遮到文字。
+     *   - 渐变用 linear-gradient 从透明到实色，模拟"沉下去"的感觉。
+     *   验证：卡片底部名字区域应是深色渐变底，文字清晰可读；
+     *         切换日间模式后变为浅色渐变底。
+     */
+    .inherit-card__info {
+      padding: 10px 12px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(42,31,20,0.6), rgba(42,31,20,0.95));
+      position: relative;
+      z-index: 2;
+    }
+
+    /* 日间模式卡片底部 info：浅色渐变底适配 */
+    .inherit-page:not(.dark) .inherit-card__info {
+      background: linear-gradient(180deg, rgba(237,229,213,0.7), rgba(237,229,213,0.95));
+    }
+
+    .inherit-card__name {
+      font-family: serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      margin: 0 0 6px;
+      transition: color 0.4s ease;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+
+    /* 日间模式卡片名字：淡阴影适配浅色背景 */
+    .inherit-page:not(.dark) .inherit-card__name {
+      text-shadow: 1px 1px 2px rgba(255,255,255,0.5);
+    }
+
+    /* 身份标签：圆角小标签 */
+    /* 卡片标签（两行："潮州木雕"在上，"传承人"在下）
+       在干什么：圆角胶囊标签改成两行结构，文字居中，
+       display:block让它独占一行，text-align:center让两行居中对齐，
+       适当增大padding让两行有呼吸感，line-height控制行间距。 */
+    .inherit-card__tag {
+      display: block;
+      font-size: 10px;
+      padding: 4px 6px;
+      border-radius: 8px;
+      background: rgba(200,164,102,0.2);
+      color: var(--inherit-text);
+      letter-spacing: 0.5px;
+      text-align: center;
+      line-height: 1.4;
+      transition: background 0.4s ease, color 0.4s ease;
+      margin-top: 4px;
+    }
+
+    /* 标签内两行文字样式 */
+    .inherit-card__tag-line {
+      display: block;
+    }
+
+    /* 国家级传承人标签用朱砂红底 */
+    .inherit-card__tag--national {
+      background: rgba(156,36,36,0.8);
+      color: #f5efe0;
+    }
+
+    /* 省级传承人标签用鎏金底（深金色，区别于国家级朱砂红）*/
+    .inherit-card__tag--provincial {
+      background: rgba(200,164,102,0.7);
+      color: #1a1209;
+    }
+
+    /* 民间匠人/清末奠基标签用灰褐底 */
+    .inherit-card__tag--folk {
+      background: rgba(138,123,110,0.5);
+      color: #f5efe0;
+    }
+
+    /* 新生代传承人标签用青绿底（象征新生）*/
+    .inherit-card__tag--new {
+      background: rgba(80,120,100,0.5);
+      color: #f5efe0;
+    }
+
+    /* 日间模式标签样式：提高背景不透明度，文字改深色，保证可读性 */
+    .inherit-page:not(.dark) .inherit-card__tag {
+      background: rgba(200,164,102,0.35);
+      color: #4a3829;
+    }
+
+    /* 卡片柔光动画（年轮弹窗关闭后联动触发） */
+    @keyframes cardGlow {
+      0%   { box-shadow: 0 0 0 rgba(200,164,102,0); filter: brightness(1); }
+      50%  { box-shadow: 0 0 20px rgba(200,164,102,0.6); filter: brightness(1.2); }
+      100% { box-shadow: 0 0 0 rgba(200,164,102,0); filter: brightness(1); }
+    }
+
+    .inherit-card--glow {
+      animation: cardGlow 2s ease forwards;
+    }
+
+    /* ===== 6. 时间轴容器（金线 + 初学/经年/承艺，正常文档流布局）=====
+     * 在干什么：放在卡片区和过渡文字之间，用 flex 纵向排列，
+     *   居中显示三个阶段文字 + 短金线分隔，不再使用 vh 绝对定位，彻底消除重叠问题。
+     *   z-index 低于卡片和文字内容，不会遮挡其他元素。
+     *
+     * 人话讲：原来的标注层用 position:absolute + vh 固定定位，
+     *   在不同屏幕尺寸上容易和过渡文字重叠。现在改成正常流式布局，
+     *   跟着内容自然排列，"初学→金线→经年→金线→承艺"纵向居中排列。
+     */
+    .inherit-overlay {
+      display: none;
+    }
+
+    .inherit-timeline {
+      position: relative;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 20px 4px;
+      margin-top: 4px;
+      pointer-events: none;
+    }
+
+    /* ===== 6.1 金色短线段 =====
+     * 在干什么：标签之间的垂直金线，两端渐隐，短线而非跨屏长线。
+     *   用 flex 布局自然排列在标签之间，不需要绝对定位。
+     */
+    .inherit-gold-line {
+      width: 1px;
+      height: 24px;
+      background: linear-gradient(180deg, transparent, #c8a466 30%, #c8a466 70%, transparent);
+      margin: 2px 0;
+      opacity: 0.6;
+    }
+
+    .inherit-label {
+      font-family: serif;
+      font-size: 16px;
+      color: #c8a466;
+      letter-spacing: 0.15em;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      margin: 0;
+      opacity: 0.85;
+      line-height: 1.4;
+    }
+
+    /* 日间模式标签：深木色 + 极淡阴影保证可读 */
+    .inherit-page:not(.dark) .inherit-label {
+      color: #4a3829;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .inherit-page:not(.dark) .inherit-gold-line {
+      background: linear-gradient(180deg, transparent, #8a7b6e 30%, #8a7b6e 70%, transparent);
+      opacity: 0.5;
+    }
+
+    /* ===== 7. 木屑粒子特效 =====
+     * 在干什么：CSS animation 驱动小木屑飘落，上限 30 个，opacity ≤ 0.2。
+     * pointer-events:none 确保不遮挡文字与交互。
+     *
+     * 新手易错点：
+     *   - 粒子容器必须 pointer-events:none，否则会拦截下层点击事件。
+     *   - z-index 要适中（在长卷之上、控件之下）。
+     *   验证方法：滚动页面时看到淡淡木屑飘落，但点击按钮不受影响。
+     */
+    .inherit-particles {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+      overflow: hidden;
+    }
+
+    .inherit-particle {
+      position: absolute;
+      width: 3px;
+      height: 5px;
+      border-radius: 1px;
+      background: rgba(180, 140, 90, 0.5);
+      opacity: 0;
+      animation: inheritParticleFall 5s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes inheritParticleFall {
+      0% {
+        opacity: 0;
+        transform: translateY(-10px) translateX(0) rotate(0deg);
+      }
+      15% {
+        opacity: 0.18;
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(120px) translateX(var(--drift, 15px)) rotate(360deg);
+      }
+    }
+
+    /* ===== 8. 木纹长卷底部过渡导语 =====
+     * 在干什么：时间轴之后的过渡文字，浅宣纸白 + 柔和木色阴影保证可读，
+     *   关键词"初学""经年""承艺"用鎏金色高亮，不加廉价重发光。
+     */
+    .inherit-transition-text {
+      position: relative;
+      z-index: 10;
+      margin-top: 12px;
+      padding: 8px 24px 8px;
+      text-align: center;
+      font-family: serif;
+      font-size: 17px;
+      line-height: 2.0;
+      color: #f8f5ed;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.4);
+      transition: color 0.4s ease;
+    }
+
+    /* 过渡导语半透明渐变暗背景：两端渐隐，增强文字可读性 */
+    .inherit-transition-text::before {
+      content: '';
+      position: absolute;
+      inset: -8px -16px;
+      background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.18) 10%, rgba(0,0,0,0.18) 90%, transparent 100%);
+      border-radius: 8px;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* 日间模式过渡文字：深木色，浅白渐变背景 */
+    .inherit-page:not(.dark) .inherit-transition-text {
+      color: #4a3829;
+      text-shadow: none;
+    }
+
+    /* 日间模式过渡导语：浅白渐变背景，适配浅色主题 */
+    .inherit-page:not(.dark) .inherit-transition-text::before {
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3) 10%, rgba(255,255,255,0.3) 90%, transparent);
+    }
+
+    /* 关键词高亮：鎏金色 + 略粗 */
+    .inherit-text-highlight {
+      color: #c8a466;
+      font-weight: 600;
+    }
+
+    .inherit-page:not(.dark) .inherit-text-highlight {
+      color: #9a6b2f;
+      font-weight: 700;
+    }
+
+    /* ===== 9. 底部并排双圆角按钮（v2 重设计：牙白实心底）=====
+     * 在干什么：v2 重大更新：按钮从原来的半透明描边按钮改为牙白/米色实心底按钮，
+     *   更有质感、更像真实的木质/象牙按钮。
+     *   padding-top 从 10px 改为 16px（配合过渡文字上移）。
+     *
+     * 新手易错点：
+     *   - 渐变用 linear-gradient(180deg, #f5e6c8, #e8d4a8) 从上到下浅米→深米，
+     *     模拟凸起按钮的光影（上方亮、下方暗）。
+     *   - box-shadow 分两层：外层投影(0 3px 10px rgba(0,0,0,0.25))制造悬浮感，
+     *     内阴影(inset 0 1px 0 rgba(255,255,255,0.4))模拟顶部高光，增加立体感。
+     *   - border:1px solid #c8a466 鎏金细边框，和整体风格统一。
+     *   - font-weight:600 半粗体，在实色底上更清晰。
+     *   验证：按钮看起来像米白色的实体按钮，有立体光影感；点击时有按压反馈。
+     */
+    .inherit-actions {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      gap: 12px;
+      padding: 4px 20px 12px;
+      justify-content: center;
+    }
+
+    .inherit-action-btn {
+      flex: 1;
+      max-width: 180px;
+      min-height: 48px;
+      padding: 14px 20px;
+      border-radius: 30px / 26px;
+      background: linear-gradient(180deg, #f7edd6 0%, #ead6ab 50%, #ddc493 100%);
+      border: 1.5px solid #c8a466;
+      color: #4a3829;
+      font-family: serif;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, filter 0.2s ease;
+      letter-spacing: 0.08em;
+      box-shadow:
+        0 4px 12px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.6),
+        inset 0 -1px 0 rgba(100,70,30,0.15);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 按钮悬停态：微亮 */
+    .inherit-action-btn:hover {
+      filter: brightness(1.05);
+    }
+
+    /* 按钮按下态：微暗 + 轻微缩 */
+    .inherit-action-btn:active {
+      filter: brightness(0.95);
+      transform: scale(0.98);
+    }
+
+    /* ===== 9.1 日间模式按钮适配 =====
+     * 在干什么：日间模式下按钮底色更浅更亮，接近宣纸白，
+     *   文字色更深，边框色略深。
+     *
+     * 新手易错点：
+     *   - 日间按钮色比夜间按钮色更浅（#faf5ea vs #f5e6c8），因为日间页面整体更亮。
+     *   验证：切日间模式后，按钮颜色变浅，和浅色页面协调。
+     */
+    .inherit-page:not(.dark) .inherit-action-btn {
+      background: linear-gradient(180deg, #faf5ea 0%, #ede2c8 100%);
+      color: #4a3829;
+      border-color: #b89456;
+    }
+
+    /* ===== 10. 匠人详情弹窗（Modal） =====
+     * 在干什么：复用 master.html 的 modal 风格，适配黑金主题。
+     * 点击卡片弹出大师详情，点遮罩/关闭按钮/Esc 关闭。
+     */
+    .inherit-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 2000;
+    }
+
+    .inherit-modal--open {
+      display: flex;
+    }
+
+    .inherit-modal__panel {
+      background: var(--inherit-card-bg);
+      border-radius: 16px;
+      max-width: 400px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 20px 18px;
+      border: 1.5px solid var(--inherit-card-border);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      animation: inheritModalIn 0.25s ease both;
+    }
+
+    @keyframes inheritModalIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.96); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .inherit-modal__close {
+      display: block;
+      margin: 0 0 12px auto;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(200,164,102,0.15);
+      color: var(--inherit-text);
+      font-size: 22px;
+      line-height: 1;
+      border: 1px solid var(--inherit-card-border);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .inherit-modal__avatar {
+      width: 80px;
+      height: 100px;
+      border-radius: 8px;
+      margin: 0 auto 12px;
+      object-fit: cover;
+      border: 2px solid var(--inherit-card-border);
+      display: block;
+    }
+
+    /* 头像加载失败时的文字占位 */
+    .inherit-modal__avatar-placeholder {
+      width: 80px;
+      height: 100px;
+      border-radius: 8px;
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: serif;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      background: var(--inherit-scroll-bg);
+      border: 2px solid var(--inherit-card-border);
+    }
+
+    .inherit-modal__name {
+      text-align: center;
+      font-family: serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--inherit-text);
+      margin: 0 0 6px;
+    }
+
+    .inherit-modal__level {
+      display: block;
+      text-align: center;
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      color: #f5efe0;
+      margin: 0 auto 14px;
+      width: fit-content;
+      background: rgba(156,36,36,0.8);
+    }
+
+    /* Modal中国家级：朱砂红（默认）*/
+    .inherit-modal__level--national {
+      background: rgba(156,36,36,0.8);
+      color: #f5efe0;
+    }
+
+    /* Modal中省级/理论大家：鎏金底 */
+    .inherit-modal__level--provincial {
+      background: rgba(200,164,102,0.8);
+      color: #1a1209;
+    }
+
+    /* Modal中民间/清末奠基：灰褐底 */
+    .inherit-modal__level--folk {
+      background: rgba(138,123,110,0.7);
+      color: #f5efe0;
+    }
+
+    .inherit-modal__story {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--inherit-text);
+      text-indent: 2em;
+    }
+
+    /* ===== 11. 冷门小故事气泡（长按彩蛋） =====
+     * 在干什么：长按匠人卡片 ≥1.5 秒弹出 trivia bubble。
+     * 样式复用 history.html 的 .trivia-bubble 风格。
+     */
+    .inherit-trivia {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      z-index: 500;
+      background: rgba(42,31,20,0.95);
+      color: #f5efe0;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(200,164,102,0.4);
+      max-width: 85vw;
+      font-family: sans-serif;
+      font-size: 13.5px;
+      line-height: 1.6;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.35s ease;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+    }
+
+    .inherit-trivia.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* 日间模式气泡底色 */
+    .inherit-page:not(.dark) .inherit-trivia {
+      background: rgba(237,229,213,0.95);
+      color: #4a3829;
+    }
+
+    /* ===== 12. 年轮互动弹窗（v3 重制版：全屏木板镌刻）=====
+     * 在干什么：点击"刻下我的坚持"按钮，全屏弹窗从底部滑入。
+     *   内含：木板年轮图 + SVG鎏金镌刻动画 + 宣纸输入框 + 双模式按钮。
+     *   支持一键自动镌刻（自动画三条弧线）和手动顺纹雕刻（手指沿纹路滑动）。
+     *   完成后显示守心印章 + 分享文案 + 保存/复制/返回三按钮。
+     *   关闭后联动：所有匠人卡片依次亮起柔光（triggerCardGlow）。
+     *
+     * 数据从哪来：背景图 wood_ring_base_clean.jpg 和 paper_input_box_base_16x9.jpg 在 assets/images/inherit/ 目录。
+     * 数据去哪：用户输入文字 → 完成页替换到结果文案中间；SVG路径d属性写死对应木板坐标。
+     *
+     * 新手易错点：
+     *   - 弹窗面板 inset:0 是全屏，不是原来的底部抽屉，用 translateY(100%)→translateY(0) 滑入。
+     *   - SVG viewBox="0 0 300 300"，手动绘制时需要把屏幕坐标换算成SVG坐标(scale=300/boardWidth)。
+     *   - stroke-dasharray/stroke-dashoffset 实现"画线"动画：先设dasharray=总长度，dashoffset=总长度，再动画到0。
+     *   - 状态类 ring-modal--state-start/carving/manual/finish 控制不同阶段的UI显示隐藏。
+     *   验证：
+     *     1) 点按钮弹窗从底部滑入，全屏木板背景，右上角×关闭
+     *     2) 输入文字 → 一键镌刻：三条弧线依次画出，木屑粒子跟随，最后守心印章弹出
+     *     3) 顺纹雕刻：沿木板滑动手指画线，画够长度完成
+     *     4) 完成页：输入框消失，显示结果文案，三按钮出现
+     */
+
+    /* 弹窗根容器：fixed全屏，默认隐藏（opacity:0 + pointer-events:none）*/
+    .inherit-ring-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1500;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+    .inherit-ring-modal--open {
+      pointer-events: auto;
+      opacity: 1;
+    }
+
+    /* 遮罩层：半透明黑，和匠人详情弹窗一致（75%黑）*/
+    .inherit-ring-modal__overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+    }
+
+    /* 弹窗面板：全屏木板背景，从底部滑入
+       inset:0 + background图片铺满 + 鎏金细边框 + 圆角 */
+    .inherit-ring-modal__panel {
+      position: absolute;
+      inset: 0;
+      background: url('assets/images/inherit/modal_carve_bg_dark_clea.jpg') center/cover no-repeat;
+      overflow-y: auto;
+      overflow-x: hidden;
+      transform: translateY(100%);
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      padding: 0;
+      border-radius: 16px;
+      border: 1px solid rgba(200,164,102,0.3);
+    }
+    .inherit-ring-modal--open .inherit-ring-modal__panel {
+      transform: translateY(0);
+    }
+    /* 鎏金内边框：背景图已自带金线框，此处移除，避免双线叠加 */
+    .inherit-ring-modal__panel::after {
+      content: none;
+    }
+
+    /* 宽屏适配：9:16比例锁定，弹窗面板居中显示（和页面主体一样）
+       人话讲：横屏/平板/桌面看时，面板不应该撑满宽屏，而是保持手机竖屏比例居中 */
+    @media (min-aspect-ratio: 9/16) {
+      .inherit-ring-modal__panel {
+        max-width: calc(100vh * 9 / 16);
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%) translateY(100%);
+      }
+      .inherit-ring-modal--open .inherit-ring-modal__panel {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+
+    /* 日间模式面板：叠一层宣纸米白半透明遮罩，让背景变浅
+       人话讲：日间模式整体是浅色调，但背景图是深色木板，用::before叠白色半透明 */
+    .inherit-page:not(.dark) .inherit-ring-modal__panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(248,245,237,0.85);
+      z-index: 0;
+      pointer-events: none;
+      border-radius: 16px;
+    }
+    /* 面板内所有直接子元素z-index设为1，浮在日间遮罩之上 */
+    .inherit-ring-modal__panel > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* 右上角关闭按钮：圆形半透明黑底 + 鎏金边 + 金色×字
+       触控区48x48px满足要求 */
+    .inherit-ring-modal__close {
+      position: absolute;
+      top: 24px;
+      right: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.3);
+      color: #c8a466;
+      font-size: 24px;
+      border: 1px solid rgba(200,164,102,0.4);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      -webkit-tap-highlight-color: transparent;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+    .inherit-ring-modal__close:active {
+      transform: scale(0.92);
+    }
+
+    /* ===== 标题区：居中，顶部留白给关闭按钮 ===== */
+    .inherit-ring-modal__header {
+      text-align: center;
+      padding: 48px 20px 4px;
+      position: relative;
+    }
+    .inherit-ring-modal__title {
+      font-family: serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #c8a466;
+      margin: 0;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      letter-spacing: 0.08em;
+    }
+    .inherit-ring-modal__subtitle {
+      font-family: serif;
+      font-size: 15px;
+      color: #c8a466;
+      opacity: 0.8;
+      margin: 8px 0 0;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      letter-spacing: 0.05em;
+    }
+    /* 日间模式标题：深木色 + 淡阴影 */
+    .inherit-page:not(.dark) .inherit-ring-modal__title {
+      color: #4a3829;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    }
+    .inherit-page:not(.dark) .inherit-ring-modal__subtitle {
+      color: #4a3829;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.15);
+    }
+
+    /* ===== 年轮木板区：正方形容器裁切，内部wrapper统一缩放让木头填满
+       人话讲：JPG图片木头周围有白底无法透明，内部wrapper放大1.4倍让白底溢出裁掉，overflow:hidden裁切
+       新手易错：用inner wrapper统一缩放所有子元素（img+svg+文字+印章），保证坐标对齐不偏移 */
+    .inherit-ring-board {
+      position: relative;
+      width: 68vw;
+      max-width: 255px;
+      aspect-ratio: 1/1;
+      margin: 0 auto;
+      overflow: hidden;
+      border-radius: 16px;
+      background: #2a1a0e;
+      border: 2px solid rgba(20,12,6,0.9);
+      box-sizing: border-box;
+      box-shadow: inset 0 0 25px 10px rgba(20,12,6,0.85);
+    }
+    .inherit-ring-board__inner {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform: scale(1.55);
+      transform-origin: center center;
+    }
+    /* 深色蒙层：让浅色木基底变暗，模拟深木色效果，鎏金轨迹在深色底上更醒目
+       人话讲：木基底图是浅色年轮，用半透明深棕色渐变蒙层（中心略亮四周更暗）直接覆盖，
+       不使用mix-blend-mode避免兼容性问题，既保留年轮纹理又让整体变暗，和黑金木纹风格统一 */
+    .inherit-ring-board__inner::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(50,28,12,0.72) 0%, rgba(32,17,7,0.82) 50%, rgba(20,10,4,0.92) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .inherit-ring-board__img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+      display: block;
+      position: relative;
+      z-index: 1;
+    }
+    /* SVG层：默认pointer-events:none（不拦截点击），手动模式下开启pointer-events接收触摸 */
+    .inherit-ring-board__svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 3;
+    }
+    /* 手动镌刻模式：SVG接收触摸/鼠标事件，touch-action:none禁止浏览器默认滚动
+       注意：类名是 ring-modal--state-manual（由JS的setRingState('manual')添加）
+       人话讲：手动模式下木板底图不拦截点击，SVG在最上层接收手指滑动事件 */
+    .ring-modal--state-manual .inherit-ring-board__svg {
+      pointer-events: auto;
+      touch-action: none;
+      z-index: 4;
+    }
+    .ring-modal--state-manual .inherit-ring-board__img {
+      pointer-events: none;
+    }
+
+    /* 文字标注：初学/经年/承艺，绝对定位在木板上对应鎏金弧线末端点旁
+       位置对照参考图：初学右上、经年左侧、承艺右下，都在木板区域内
+       新手易错：因为inner wrapper有scale(1.4)缩放，font-size和位置百分比要按缩小比例写，
+         视觉上才对。可见区域约是wrapper的14%-86%范围（超出会被board的overflow:hidden裁掉）*/
+    .ring-label {
+      position: absolute;
+      font-family: serif;
+      font-size: 12px;
+      color: #c8a466;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      letter-spacing: 0.1em;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 3;
+    }
+    .ring-label--start {
+      top: 25%;
+      right: 21%;
+    }
+    .ring-label--middle {
+      top: 48%;
+      left: 21%;
+    }
+    .ring-label--end {
+      bottom: 28%;
+      right: 21%;
+    }
+    /* 日间模式标注文字：深木色 */
+    .inherit-page:not(.dark) .ring-label {
+      color: #4a3829;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.15);
+    }
+
+    /* 鎏金弧线轨迹：用stroke-dasharray/offset实现画线动画
+       初始状态opacity:0隐藏，动画时JS会根据实际路径长度设置dasharray/offset
+       人话讲：深色刻槽阴影已经在SVG滤镜(ringGlow)里做了，CSS这边只做透明度过渡
+       新手易错：不要同时在CSS和SVG里加阴影，会叠加变脏且影响性能 */
+    .ring-trace {
+      transition: opacity 0.3s ease;
+    }
+    /* 鎏金标注点：加深色drop-shadow让圆点在木纹上跳出来 */
+    .ring-dot {
+      transition: opacity 0.3s ease;
+      filter: drop-shadow(0 1px 2px rgba(40,20,0,0.8));
+    }
+
+    /* ===== 中心守心印章：朱砂红竖排方章，弹性放大动画弹出
+       人话讲：初始scale(0)+opacity:0隐藏，加--show类后scale(1)+opacity:1弹出来
+       writing-mode:vertical-rl让文字竖排（"守""心"上下排列）
+       注意：尺寸写小一点，因为inner wrapper有scale(1.4)放大 */
+    .ring-seal-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      width: 34px;
+      height: 40px;
+      background: #9c2424;
+      color: #f8f5ed;
+      font-family: serif;
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      writing-mode: vertical-rl;
+      letter-spacing: 4px;
+      border-radius: 3px;
+      opacity: 0;
+      transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 5;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      pointer-events: none;
+    }
+    .ring-seal-center--show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    /* 木板上的提示文字：在木板底部区域，宣纸上方，鎏金色
+       人话讲：参考图中"写下你坚持了很久的一件事"是印在木板上的，不是placeholder
+       注意：font-size写小一点（11px→视觉约15px），因为inner wrapper有scale(1.4)放大 */
+    .ring-board-hint {
+      position: absolute;
+      bottom: 36%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: serif;
+      font-size: 11px;
+      color: #c8a466;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+      letter-spacing: 0.1em;
+      margin: 0;
+      white-space: nowrap;
+      z-index: 3;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+    /* 镌刻开始后隐藏木板提示文字 */
+    .ring-modal--state-carving .ring-board-hint,
+    .ring-modal--state-manual .ring-board-hint,
+    .ring-modal--state-finish .ring-board-hint {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .inherit-page:not(.dark) .ring-board-hint {
+      color: #4a3829;
+      text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+    }
+
+    /* ===== 木屑粒子容器：铺满木板区，不拦截事件 ===== */
+    .ring-particles {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    /* 单个木屑粒子：小矩形，CSS动画飘落+旋转+缩小消失
+       --rx/--ry/--rot是随机CSS变量，由JS创建时设置 */
+    .ring-particle {
+      position: absolute;
+      background: #c8a466;
+      opacity: 0;
+      pointer-events: none;
+      border-radius: 1px;
+      animation: ringParticleFall 1.2s ease-out forwards;
+    }
+    @keyframes ringParticleFall {
+      0% { opacity: 0; transform: translate(0,0) rotate(0deg) scale(0.5); }
+      20% { opacity: 0.3; }
+      100% { opacity: 0; transform: translate(var(--rx,10px), var(--ry,20px)) rotate(var(--rot,45deg)) scale(0.3); }
+    }
+
+    /* ===== 宣纸输入/展示区：宣纸底图 + 绝对定位文字层
+       用负margin-top让宣纸叠在木板底部上方，形成层次感
+       人话讲：aspect-ratio:16/9锁定宣纸比例和素材一致；overflow:hidden裁掉放大底图溢出的白边
+       新手易错：底图scale放大1.2倍裁白边，但文字/印章不跟着放大，要用百分比inset定位到纸张区域 */
+    .ring-paper-wrap {
+      position: relative;
+      width: 80%;
+      max-width: 290px;
+      aspect-ratio: 16/9;
+      margin: -10px auto 0;
+      z-index: 4;
+      overflow: hidden;
+      border-radius: 8px;
+      background: #ede2ce;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .ring-paper__bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(2.2);
+      transform-origin: center center;
+    }
+    /* 输入框：绝对定位在宣纸红色内框区域内，透明背景无边框，文字居中
+       人话讲：底图scale(2.2)放大后只露出纸条中心米色区域，红边被裁切了，inset用小边距
+       新手易错：移动端浏览器textarea默认有白色背景和内阴影，必须用appearance:none和box-shadow:none清掉 */
+    .ring-paper__input {
+      position: absolute;
+      inset: 8% 8% 8% 8%;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: serif;
+      font-size: 14px;
+      color: #4a3829;
+      line-height: 1.6;
+      resize: none;
+      text-align: center;
+      -webkit-appearance: none;
+      appearance: none;
+      box-shadow: none;
+      padding: 0;
+      margin: 0;
+    }
+    /* 完成页结果文案：默认隐藏，finish状态显示，小边距因为放大后只露出中心书写区 */
+    .ring-paper__result {
+      position: absolute;
+      inset: 6% 10% 6% 10%;
+      display: none;
+      font-family: serif;
+      font-size: 11px;
+      color: #4a3829;
+      line-height: 1.55;
+      text-align: center;
+      margin: 0;
+      padding-right: 24px;
+      padding-bottom: 2px;
+      box-sizing: border-box;
+    }
+    /* 时光有痕印章：右下角朱砂红小方章，贴宣纸右下角 */
+    .ring-paper__seal {
+      position: absolute;
+      right: 5%;
+      bottom: 5%;
+      width: 26px;
+      height: 26px;
+      border: 1.5px solid #9c2424;
+      border-radius: 2px;
+      color: #9c2424;
+      font-family: serif;
+      font-size: 7px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.1;
+      letter-spacing: 0.5px;
+      z-index: 2;
+    }
+
+    /* ===== 提示文字：操作指引（如"沿年轮纹路滑动手指镌刻"）===== */
+    .ring-hint {
+      text-align: center;
+      color: #c8a466;
+      font-size: 13px;
+      opacity: 0.7;
+      margin: 8px 0 0;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+      min-height: 20px;
+    }
+    /* 日间模式提示文字：深木色 */
+    .inherit-page:not(.dark) .ring-hint {
+      color: #4a3829;
+    }
+
+    /* ===== 按钮组：flex布局，海棠形圆角，和主页面按钮风格一致 ===== */
+    .ring-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      padding: 16px 20px calc(20px + env(safe-area-inset-bottom,0px));
+    }
+    /* 按钮样式：复用主页面按钮的牙白渐变 + 海棠形圆角(30px/26px)
+       border-radius:30px/26px 是海棠形（横向椭圆），国风特色 */
+    .ring-btn {
+      flex: 1;
+      max-width: 180px;
+      min-height: 48px;
+      padding: 12px 16px;
+      border-radius: 30px/26px;
+      background: linear-gradient(180deg,#f7edd6 0%,#ead6ab 50%,#ddc493 100%);
+      border: 1.5px solid #c8a466;
+      color: #4a3829;
+      font-family: serif;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(100,70,30,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: filter 0.2s ease, transform 0.2s ease;
+    }
+    .ring-btn--small {
+      font-size: 13px;
+      padding: 10px 12px;
+      max-width: 120px;
+    }
+    .ring-btn:hover {
+      filter: brightness(1.05);
+    }
+    .ring-btn:active {
+      filter: brightness(0.95);
+      transform: scale(0.98);
+    }
+    .ring-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ===== 状态控制：默认只显示初始按钮，finish状态切换到完成按钮 =====
+       人话讲：用状态类控制哪些元素显示/隐藏，不用JS逐个style.display
+       - ring-actions--finish 默认隐藏（display:none）
+       - finish状态：隐藏start按钮、显示finish按钮、隐藏输入框、显示结果文案 */
+    .ring-actions--finish { display: none; }
+    .ring-paper__result { display: none; }
+    .ring-paper__seal { display: none; }
+    .ring-modal--state-finish .ring-actions--start { display: none; }
+    .ring-modal--state-finish .ring-actions--finish { display: flex; }
+    .ring-modal--state-finish .ring-paper__input { display: none; }
+    .ring-modal--state-finish .ring-paper__result { display: block; }
+    .ring-modal--state-finish .ring-paper__seal { display: flex; }
+
+    /* ===== 保存图片提示弹层（微信浏览器降级用）=====
+       在干什么：微信不支持JS触发下载，所以弹出浮层让用户长按图片保存。
+       全屏半透明黑底，居中显示图片和提示文字。 */
+    .ring-save-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      flex-direction: column;
+    }
+    .ring-save-overlay--show {
+      display: flex;
+    }
+    .ring-save-overlay__box {
+      background: #2a1f14;
+      border: 1px solid #c8a466;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      max-width: 80%;
+    }
+    .ring-save-overlay__box p {
+      color: #c8a466;
+      font-family: serif;
+      margin: 0 0 12px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    .ring-save-overlay__box img {
+      max-width: 260px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(200,164,102,0.3);
+    }
+    /* 日间模式保存弹层：宣纸米白底 */
+    .inherit-page:not(.dark) .ring-save-overlay__box {
+      background: #f8f5ed;
+    }
+
+    /* ===== Toast轻提示：居中显示，半透明黑底圆角 ===== */
+    .ring-toast {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: #c8a466;
+      font-family: serif;
+      font-size: 14px;
+      padding: 10px 24px;
+      border-radius: 20px;
+      border: 1px solid rgba(200,164,102,0.3);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 30;
+    }
+    .ring-toast--show {
+      opacity: 1;
+    }
+    /* 日间模式Toast：白底深字 */
+    .inherit-page:not(.dark) .ring-toast {
+      background: rgba(255,255,255,0.95);
+      color: #4a3829;
+    }
+    /* 日间模式关闭按钮：浅底深字 */
+    .inherit-page:not(.dark) .inherit-ring-modal__close {
+      background: rgba(255,255,255,0.6);
+      color: #4a3829;
+      border-color: rgba(74,56,41,0.3);
+      text-shadow: none;
+    }
+    /* 日间模式遮罩：浅色半透明 */
+    .inherit-page:not(.dark) .inherit-ring-modal__overlay {
+      background: rgba(248,245,237,0.7);
+    }
+
+    /* ===== 13. 底部固定导航栏 =====
+     * 在干什么：复用 style.css 的 .bottom-nav 标准导航，
+     *   "传承"项加 .bottom-nav__item--active 高亮朱砂红。
+     *   不另写导航样式，全站共用一套，保证视觉统一。
+     */
+    /* 传承页导航背景色适配（浅色模式用统一白色，深色模式跟随主题） */
+    .inherit-page:not(.dark) .bottom-nav {
+      background: rgba(255, 253, 248, 0.98);
+      border-top-color: rgba(212, 175, 55, 0.2);
+      backdrop-filter: blur(10px);
+    }
+    .inherit-page.dark .bottom-nav {
+      background: var(--inherit-card-bg);
+      border-top-color: rgba(200,164,102,0.2);
+      transition: background 0.4s ease, border-top-color 0.4s ease;
+    }
+
+    /* 传承页导航文字颜色适配 */
+    .inherit-page:not(.dark) .bottom-nav__item {
+      color: var(--color-text-light);
+    }
+    .inherit-page.dark .bottom-nav__item {
+      color: var(--inherit-text-secondary);
+    }
+
+    .inherit-page:not(.dark) .bottom-nav__item--active {
+      color: var(--color-red);
+    }
+    .inherit-page.dark .bottom-nav__item--active {
+      color: #c8a466;
+    }
+
+    /* ===== 14. 响应式微调 =====
+     * 在干什么：小屏幕下调整卡片尺寸、间距和文字大小，保证移动端体验。
+     *   宽屏下9:16比例锁定，页面居中显示。
+     */
+    @media (max-width: 430px) {
+      .inherit-title { font-size: 34px; }
+      .inherit-subtitle { font-size: 16px; }
+      .inherit-title-area { padding-top: 20px; }
+      .inherit-cards-section { margin-top: 3vh; }
+      .inherit-card--featured { transform: scale(1.025) translateY(2px) !important; }
+      .inherit-card { transform: translateY(-2px) scale(0.94); }
+      .inherit-timeline { padding: 10px 20px 4px; }
+      .inherit-label { font-size: 15px; }
+      .inherit-gold-line { height: 22px; }
+      .inherit-transition-text { margin-top: 8px; padding: 8px 20px 6px; }
+      .inherit-actions { padding: 4px 16px 8px; }
+    }
+
+    /* 390px以下屏幕：过渡文字适当缩小 */
+    @media (max-width: 390px) {
+      .inherit-transition-text { font-size: 16px; }
+    }
+
+    @media (max-width: 360px) {
+      .inherit-title { font-size: 30px; }
+      .inherit-title-area { padding-top: 16px; }
+      .inherit-card { flex: 0 0 108px; }
+      .inherit-cards-scroll { padding: 5px calc(50% - 54px); gap: 8px; }
+      .inherit-action-btn { font-size: 13px; padding: 10px 12px; }
+      .inherit-card--featured { transform: scale(1.02) translateY(1px) !important; }
+      .inherit-card { transform: translateY(-1px) scale(0.93); }
+      .inherit-timeline { padding: 8px 16px 4px; }
+      .inherit-label { font-size: 14px; }
+      .inherit-gold-line { height: 20px; margin: 2px 0; }
+      .inherit-transition-text { margin-top: 6px; font-size: 15px; padding: 6px 16px 6px; }
+      .inherit-actions { padding: 4px 12px 8px; gap: 8px; }
+    }
+
+    /* ===== 宽屏适配：9:16比例锁定后，顶部按钮和粒子层对齐页面内容区 =====
+     * 人话讲：当屏幕宽高比大于9:16时（横屏/平板/桌面），页面居中显示，
+     *   但 position:fixed 的元素是相对视口定位的，不会跟随页面居中。
+     *   用 calc 计算右侧偏移：(视口宽 - 页面宽)/2 + 16px 内边距，
+     *   这样按钮就不会跑到屏幕最右边缘，而是贴着页面内容区右边界。
+     */
+    @media (min-aspect-ratio: 9/16) {
+      .inherit-top-controls {
+        right: calc((100vw - min(100vw, 100vh * 9 / 16)) / 2 + 16px);
+      }
+      .inherit-particles {
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: calc(100vh * 9 / 16);
+        width: 100%;
+      }
+    }
+
+    /* ===== 匠语漫行全屏模态 ===== */
+    /* 人话讲：全屏覆盖的黑色容器，默认隐藏，点击按钮后淡入 */
+    .jiangyu-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+      overflow: hidden;
+    }
+    .jiangyu-modal.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* 背景图：匠语漫行UI */
+    .jiangyu-modal__bg {
+      position: absolute;
+      inset: 0;
+      background: url('assets/images/inherit/jiangyu_bg.jpg') center center / cover no-repeat;
+      z-index: 0;
+    }
+
+    /* 右上角关闭按钮：更明显的金色边框和半透明深色背景，让用户一眼看到
+       人话讲：按钮边框加粗加深，背景更暗，金色更亮，确保在黑色背景上非常醒目 */
+    .jiangyu-modal__close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid rgba(212, 175, 55, 0.8);
+      background: rgba(0, 0, 0, 0.6);
+      color: #f5e6a8;
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.3s ease;
+      -webkit-tap-highlight-color: transparent;
+      text-shadow: 0 0 8px rgba(232, 201, 104, 0.6);
+      box-shadow: 0 0 15px rgba(232, 201, 104, 0.3);
+    }
+    .jiangyu-modal__close:active {
+      transform: scale(0.9);
+      background: rgba(0, 0, 0, 0.75);
+    }
+
+    /* 飘字区域：避开中央"潮州木雕"竖排文字区域，顶部留60px，底部留200px给光球
+       人话讲：中央区域留给背景图的"潮州木雕"四个大字，飘字在两侧区域滑过（JS控制垂直位置分布）
+       新手易错点：不能让飘字盖住背景图上的核心文字，所以区域要给够，但实际位置由JS控制在上下两区 */
+    .jiangyu-floating {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      right: 0;
+      bottom: 200px;
+      overflow: hidden;
+      z-index: 2;
+    }
+
+    /* 单条飘字：透明度提高到0.45，让文字更清晰可读，但不要太抢眼
+       人话讲：文字从屏幕右侧外面开始，向左滑动，初始位置 left:100% 保证从右外进入
+       新手易错点：如果不设置left，绝对定位元素默认在左边，文字会从左往右消失而不是从右往左滑
+       字体调整：基础字体从16px改为20px，让飘字更清晰易读 */
+    .jiangyu-floating__item {
+      position: absolute;
+      left: 100%; /* 初始位置在容器右侧外面，从右往左滑 */
+      white-space: nowrap;
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 20px;
+      color: #e8d4a0;
+      opacity: 0;
+      animation: jiangyuFloat linear forwards;
+      text-shadow: 0 0 10px rgba(200, 164, 102, 0.5), 0 1px 3px rgba(0,0,0,0.6);
+      pointer-events: none;
+    }
+
+    /* 飘字动画：从右侧外滑入（left:100% + translateX(0)），到左侧外滑出
+       人话讲：从屏幕右边进来，穿过整个屏幕，从左边出去，文字更清晰但不抢中央大字焦点
+       新手易错点：translateX 是在 left:100% 基础上再偏移，所以 calc(-100% - 100vw) 刚好完全滑出左侧 */
+    @keyframes jiangyuFloat {
+      0% {
+        transform: translateX(0);
+        opacity: 0;
+      }
+      8% {
+        opacity: 0.45;
+      }
+      92% {
+        opacity: 0.45;
+      }
+      100% {
+        transform: translateX(calc(-100% - 100vw));
+        opacity: 0;
+      }
+    }
+
+    /* 点击文字容器：透明、无圆形、无边框，仅作为定位和点击区域
+       人话讲：圆形光球去掉了，div 只保留定位和点击绑定，视觉上只剩"点击"两个字
+       新手易错点：top:50% + translate(-50%,-50%) 是经典水平垂直居中，手机端也会自动居中 */
+    .jiangyu-orb {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      z-index: 5;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.2s ease;
+    }
+    .jiangyu-orb:active {
+      transform: translate(-50%, -50%) scale(0.94);
+    }
+
+    /* 中央"点击"文字：淡鎏金色、字体加大、无边框无背景
+       人话讲：用户要求只保留淡鎏金文字，字体大一点，去掉圆形按钮
+       新手易错点：letter-spacing 把两个字间距拉开，但不要过大显得松散 */
+    .jiangyu-orb__text {
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 28px;
+      color: #c8a466;
+      font-weight: 500;
+      letter-spacing: 6px;
+      text-shadow: 0 0 12px rgba(200, 164, 102, 0.5);
+      position: relative;
+      z-index: 2;
+      pointer-events: none; /* 点击事件仍由容器 div 处理 */
+    }
+
+    /* 祝福语弹窗遮罩：半透明黑色 */
+    .jiangyu-blessing {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+    .jiangyu-blessing.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .jiangyu-blessing__overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    .jiangyu-blessing__panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 85%;
+      max-width: 340px;
+      background: linear-gradient(180deg, rgba(255,253,245,0.98) 0%, rgba(245,239,224,0.98) 100%);
+      border: 1px solid rgba(212, 175, 55, 0.5);
+      border-radius: 16px;
+      padding: 32px 24px 24px;
+      text-align: center;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .jiangyu-blessing__text {
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 16px;
+      line-height: 1.9;
+      color: #3A2A1E;
+      margin: 0 0 24px;
+      letter-spacing: 0.05em;
+    }
+
+    .jiangyu-blessing__close {
+      padding: 10px 36px;
+      border-radius: 30px / 26px;
+      border: 1.5px solid #c8a466;
+      background: linear-gradient(180deg, #faf5ea 0%, #ede2c8 100%);
+      color: #4a3829;
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.2s ease, filter 0.2s ease;
+      box-shadow:
+        0 3px 10px rgba(92,64,51,0.12),
+        inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+    .jiangyu-blessing__close:active {
+      transform: scale(0.96);
+      filter: brightness(0.95);
+    }
+
+    /* 手机端适配：窄屏下调整各元素尺寸和位置
+       人话讲：手机屏幕小，文字和按钮都要适当缩小，但保持比例协调
+       新手易错点：光球容器不再设置宽高（已去掉圆形），手机端只调文字大小即可 */
+    @media (max-width: 480px) {
+      .jiangyu-orb__text {
+        font-size: 22px;
+        letter-spacing: 4px;
+      }
+      .jiangyu-floating__item {
+        font-size: 17px !important; /* 覆盖JS设置的inline style */
+      }
+      .jiangyu-modal__close {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+        top: 12px;
+        right: 12px;
+      }
+      .jiangyu-blessing__panel {
+        width: 90%;
+        padding: 24px 20px;
+      }
+      .jiangyu-blessing__text {
+        font-size: 15px;
+        line-height: 1.8;
+      }
+    }
