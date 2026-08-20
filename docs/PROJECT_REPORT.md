@@ -485,13 +485,16 @@ AI页（ai.html）此前采用深色黑金木纹主题（#0d0906深黑胡桃木�
 
 ### 11.6 API配置说明
 
-在`ai.html`文件中找到`DEEPSEEK_API_KEY`常量（约第750行附近），将`'YOUR_DEEPSEEK_API_KEY_HERE'`替换为你的DeepSeek API Key：
+当前 AI 接入使用同源 `/api/chat` 代理，默认提供商为硅基流动，模型为 `Qwen/Qwen3-8B`。密钥只配置在服务端环境变量中，不能写入 `ai.html`：
 
-```javascript
-const DEEPSEEK_API_KEY = '你的API Key在这里';  // 替换这一行
+```powershell
+$env:AI_PROVIDER = 'siliconflow'
+$env:SILICONFLOW_MODEL = 'Qwen/Qwen3-8B'
+$env:SILICONFLOW_API_KEY = '你的硅基流动密钥'
+py -3 server/start_server.py
 ```
 
-**未配置Key时的行为**：自动降级为本地木雕知识库回复（蟹篓镂空技法介绍），确保用户体验不中断。
+**未配置 Key 时的行为**：本地静态预览自动使用本地兜底话术；完整 Python 服务会返回配置提示，确保不会把密钥暴露给浏览器。
 
 **新手易错点**：
 1. API Key不要加多余空格或引号嵌套

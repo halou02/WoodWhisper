@@ -143,8 +143,8 @@ WoodWhisper/
 
 ### 4.4 AI数字人页 (ai.html)
 - **功能**：通过同源 `/api/chat` 请求 AI、语音识别输入、语音合成朗读
-- **安全规则**：API Key 只放在 Python 服务或 EdgeOne Function 的 `DEEPSEEK_API_KEY` 环境变量中，浏览器不保存密钥
-- **关键函数**：`sendToDeepSeek(messages)`、`startVoiceRecognition()`、`speak(text)`
+- **安全规则**：默认使用硅基流动 `Qwen/Qwen3-8B`；API Key 只放在 Python 服务或 EdgeOne Function 的 `SILICONFLOW_API_KEY` 环境变量中，浏览器不保存密钥
+- **关键函数**：`callDeepSeek(userText)`、`startVoiceRecognition()`、`speak(text)`
 - **本地预览差异**：Node 静态预览不提供 `/api/chat`；真实 AI 回复需使用 Python 服务或生产函数
 
 ### 4.5 备用大师页 (master.html)
@@ -169,7 +169,7 @@ WoodWhisper/
 1. **XSS防护**：所有用户输入/动态数据插入`innerHTML`前必须用`escapeHtml()`转义
 2. **纯文本优先**：只用`textContent`不用`innerHTML`来设置纯文字
 3. **CSS注入防护**：颜色值用正则`/^#[0-9A-Fa-f]{6}$/`校验，不合法返回默认色
-4. **API Key**：禁止写入 HTML、JavaScript、部署包或 Git；仅从服务端环境变量 `DEEPSEEK_API_KEY` 读取
+4. **API Key**：禁止写入 HTML、JavaScript、部署包或 Git；默认仅从服务端环境变量 `SILICONFLOW_API_KEY` 读取
 
 ### 5.3 路径规范
 - 所有路径使用**相对路径**

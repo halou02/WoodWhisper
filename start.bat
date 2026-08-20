@@ -9,7 +9,7 @@ if %errorlevel% equ 0 (
   py -3 -c "import sys" >nul 2>nul
   if %errorlevel% equ 0 (
     echo  Full server starting at http://localhost:8124
-    echo  AI chat is available after setting DEEPSEEK_API_KEY.
+    echo  AI chat uses SiliconFlow Qwen/Qwen3-8B after setting SILICONFLOW_API_KEY.
     echo  Press Ctrl+C to stop.
     echo.
     py -3 server\start_server.py
@@ -21,7 +21,7 @@ if %errorlevel% equ 0 (
 where python >nul 2>nul
 if %errorlevel% equ 0 (
   echo  Full server starting at http://localhost:8124
-  echo  AI chat is available after setting DEEPSEEK_API_KEY.
+  echo  AI chat uses SiliconFlow Qwen/Qwen3-8B after setting SILICONFLOW_API_KEY.
   echo  Press Ctrl+C to stop.
   echo.
   python server\start_server.py

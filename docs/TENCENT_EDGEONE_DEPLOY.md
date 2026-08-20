@@ -7,15 +7,17 @@
 - 静态站点根目录：`.edgeone-build`
 - AI 接口：`.edgeone-build/functions/api/chat.js`
 - 前端请求：同源 `/api/chat`
-- 密钥：在 EdgeOne Pages 的环境变量中设置 `DEEPSEEK_API_KEY`
+- 提供商：在 EdgeOne Pages 环境变量中设置 `AI_PROVIDER=siliconflow`
+- 模型：可设置 `SILICONFLOW_MODEL=Qwen/Qwen3-8B`
+- 密钥：在 EdgeOne Pages 的敏感环境变量中设置 `SILICONFLOW_API_KEY`
 
-浏览器不会接触 DeepSeek API Key。
+浏览器不会接触硅基流动或 DeepSeek API Key。
 
 ## 部署步骤
 
 1. 在腾讯云 EdgeOne Pages 创建项目并连接 Git 仓库，或上传 `.edgeone-build` 的内容。
 2. 将构建/发布目录设为 `.edgeone-build`；这是静态站点和 `functions` 目录共同的根目录。
-3. 在项目的生产环境变量中新增 `DEEPSEEK_API_KEY`，填入 DeepSeek 密钥并设为敏感变量。
+3. 在项目的生产环境变量中新增 `AI_PROVIDER=siliconflow`、`SILICONFLOW_MODEL=Qwen/Qwen3-8B`，以及敏感变量 `SILICONFLOW_API_KEY`。
 4. 部署后访问 `https://你的域名/ai.html`，确认页面请求 `POST /api/chat`：
    - 未配置密钥时应返回 `503`；
    - 配置正确后应返回 `{ "reply": "..." }`。
@@ -25,9 +27,9 @@
 ## 发布前检查
 
 - 不要使用 `.edgeone-static` 作为发布目录：它不包含 `functions/api/chat.js`，AI 功能会失效。
-- 不要把 `DEEPSEEK_API_KEY` 写入 HTML、JavaScript、上传文件或 Git 仓库。
+- 不要把 `SILICONFLOW_API_KEY`、`DEEPSEEK_API_KEY` 或任何其他密钥写入 HTML、JavaScript、上传文件或 Git 仓库。
 - 上传前确认 `.edgeone-build` 不含 `references/`、`docs`、测试文件或重复资源；这些内容不应公开发布。
-- 在 DeepSeek 控制台设置消费限额和告警；EdgeOne 函数本身不能替代应用级身份验证与更严格的分布式限流。
+- 在硅基流动控制台查看调用额度和频率限制；EdgeOne 函数本身不能替代应用级身份验证与更严格的分布式限流。
 - 站点使用浏览器语音识别；生产域名必须走 HTTPS，用户仍需自行同意麦克风权限。
 
 ## 本地开发

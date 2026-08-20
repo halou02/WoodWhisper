@@ -1,4 +1,16 @@
 ﻿const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/chat/completions';
+const PROVIDERS = {
+  siliconflow: {
+    endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+    keyName: 'SILICONFLOW_API_KEY',
+    defaultModel: 'Qwen/Qwen3-8B',
+  },
+  deepseek: {
+    endpoint: 'https://api.deepseek.com/chat/completions',
+    keyName: 'DEEPSEEK_API_KEY',
+    defaultModel: 'deepseek-chat',
+  },
+};
 const MAX_REQUEST_BYTES = 4_096;
 const MAX_MESSAGE_CHARS = 1_000;
 const MAX_TIMEOUT_MS = 20_000;
@@ -59,23 +71,31 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Message must be a non-empty string under 1000 characters.' }, 400);
   }
 
-  const apiKey = env.DEEPSEEK_API_KEY;
+  const providerName = String(env.AI_PROVIDER || 'siliconflow').trim().toLowerCase();
+  const provider = PROVIDERS[providerName];
+  if (!provider) {
+    return json({ error: 'AI provider is not configured.' }, 503);
+  }
+  const apiKey = env[provider.keyName];
   if (!apiKey) {
     return json({ error: 'AI service is not configured.' }, 503);
   }
+  const model = providerName === 'siliconflow'
+    ? (env.SILICONFLOW_MODEL || provider.defaultModel)
+    : (env.DEEPSEEK_MODEL || provider.defaultModel);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), MAX_TIMEOUT_MS);
 
   try {
-    const upstream = await fetch(DEEPSEEK_ENDPOINT, {
+    const upstream = await fetch(provider.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model,
         messages: [
           {
             role: 'system',

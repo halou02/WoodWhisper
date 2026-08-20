@@ -16,7 +16,20 @@ MAX_MESSAGE_CHARS = 1_000
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_MAX_REQUESTS = 12
 UPSTREAM_TIMEOUT_SECONDS = 20
-DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+PROVIDER_CONFIG = {
+    "siliconflow": {
+        "url": "https://api.siliconflow.cn/v1/chat/completions",
+        "key_env": "SILICONFLOW_API_KEY",
+        "model_env": "SILICONFLOW_MODEL",
+        "default_model": "Qwen/Qwen3-8B",
+    },
+    "deepseek": {
+        "url": "https://api.deepseek.com/chat/completions",
+        "key_env": "DEEPSEEK_API_KEY",
+        "model_env": "DEEPSEEK_MODEL",
+        "default_model": "deepseek-chat",
+    },
+}
 
 class WoodWhisperHandler(http.server.SimpleHTTPRequestHandler):
     request_log = defaultdict(deque)
@@ -61,12 +74,18 @@ class WoodWhisperHandler(http.server.SimpleHTTPRequestHandler):
         if not isinstance(message, str) or not message.strip() or len(message) > MAX_MESSAGE_CHARS:
             self._send_json(400, {"error": "Message must be a non-empty string under 1000 characters."})
             return
-        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        provider_name = os.environ.get("AI_PROVIDER", "siliconflow").strip().lower()
+        provider = PROVIDER_CONFIG.get(provider_name)
+        if not provider:
+            self._send_json(503, {"error": "AI provider is not configured."})
+            return
+        api_key = os.environ.get(provider["key_env"])
         if not api_key:
             self._send_json(503, {"error": "AI service is not configured."})
             return
+        model = os.environ.get(provider["model_env"], provider["default_model"])
         request_body = json.dumps({
-            "model": "deepseek-chat",
+            "model": model,
             "messages": [
                 {"role": "system", "content": self._system_prompt()},
                 {"role": "user", "content": message.strip()},
@@ -74,7 +93,7 @@ class WoodWhisperHandler(http.server.SimpleHTTPRequestHandler):
             "max_tokens": 500,
         }).encode("utf-8")
         upstream_request = urllib.request.Request(
-            DEEPSEEK_URL, data=request_body,
+            provider["url"], data=request_body,
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}, method="POST",
         )
         try:

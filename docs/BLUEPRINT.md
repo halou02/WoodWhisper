@@ -57,7 +57,7 @@ WoodWhisper/
 ## AI 与部署
 
 - 浏览器请求 `POST /api/chat`，请求体为 `{ "message": "..." }`，成功响应为 `{ "reply": "..." }`。
-- API Key 只通过 `DEEPSEEK_API_KEY` 环境变量提供给 `server/start_server.py` 或 EdgeOne Pages Function。严禁写入 HTML、JS 或 Git 仓库。
+- 默认通过 `SILICONFLOW_API_KEY` 调用硅基流动 `Qwen/Qwen3-8B`；`AI_PROVIDER`、模型和密钥只通过服务端环境变量提供。严禁写入 HTML、JS 或 Git 仓库。
 - 本地 AI 联调：`py -3 server/start_server.py`，访问 `http://127.0.0.1:8124`。
 - 仅静态预览：`npm run preview`，访问 `http://127.0.0.1:8125`。静态预览不支持 `/api/chat`。
 - 生产发布目录为 `.edgeone-build`，并必须包含 `functions/api/chat.js`。
