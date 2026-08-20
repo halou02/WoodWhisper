@@ -70,7 +70,7 @@
       width: 100%;
       box-sizing: border-box;
       /* 夜间模式：合成背景图（长卷+纹理），fixed 不随内容滚动 */
-      background: url('assets/images/inherit/inherit_composite_bg_clean_from_screenshot.jpg') center top / cover no-repeat fixed;
+      background: url('../assets/images/inherit/inherit_composite_bg_clean_from_screenshot.jpg') center top / cover no-repeat fixed;
       background-color: var(--inherit-bg); /* 兜底色，图片加载前显示 */
       position: relative;
       overflow-x: hidden;
@@ -965,7 +965,7 @@
     .inherit-ring-modal__panel {
       position: absolute;
       inset: 0;
-      background: url('assets/images/inherit/modal_carve_bg_dark_clea.jpg') center/cover no-repeat;
+      background: url('../assets/images/inherit/modal_carve_bg_dark_clea.jpg') center/cover no-repeat;
       overflow-y: auto;
       overflow-x: hidden;
       transform: translateY(100%);
@@ -1615,7 +1615,7 @@
     .jiangyu-modal__bg {
       position: absolute;
       inset: 0;
-      background: url('assets/images/inherit/jiangyu_bg.jpg') center center / cover no-repeat;
+      background: url('../assets/images/inherit/jiangyu_bg.jpg') center center / cover no-repeat;
       z-index: 0;
     }
 

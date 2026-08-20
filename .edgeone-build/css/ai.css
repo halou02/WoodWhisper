@@ -167,7 +167,7 @@
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background-image: url('assets/images/ai/数字IP正视图.png');
+      background-image: url('../assets/images/ai/数字IP正视图.png');
       background-size: cover;
       background-position: center top;
       border: 1.5px solid var(--color-gold);
@@ -214,7 +214,7 @@
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background-image: url('assets/images/ai/数字IP正视图.png');
+      background-image: url('../assets/images/ai/数字IP正视图.png');
       background-size: cover;
       background-position: center top;
       border: 1.5px solid var(--color-gold);

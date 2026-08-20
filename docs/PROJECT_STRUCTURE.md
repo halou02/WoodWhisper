@@ -26,16 +26,17 @@ WoodWhisper/
 │   ├── history.html        # 历史脉络页 - 5朝代时间轴+展品拼图
 │   ├── inherit.html        # 传承页 - 匠人名录+年轮镌刻交互
 │   ├── ai.html             # AI数字人页 - 小匠对话(需配置API Key)
-│   └── master.html         # 匠人详情页 - 12位匠人卡片列表
+│   └── master.html         # 备用大师入口，跳转至 inherit.html
 │
 ├── 📄 便捷脚本
 │   ├── start.bat           # Windows一键启动服务器（双击即可）
 │   └── .gitignore          # Git忽略配置，防止敏感文件提交
 │
 ├── 📁 css/                 # 样式目录
-│   └── style.css           # ⭐ 全站唯一公共样式表（1500+行）
-│                           # 包含：CSS变量、重置样式、导航栏、通用组件
-│                           # 各页面专属样式直接写在对应HTML的<style>标签内
+│   ├── style.css           # 全站公共样式、变量、导航栏和通用组件
+│   ├── history.css         # 历史页专属样式
+│   ├── inherit.css         # 传承页专属样式
+│   └── ai.css              # AI页专属样式
 │
 ├── 📁 js/                  # 公共脚本目录
 │   └── common.js           # ⭐ 全站公共工具函数（escapeHtml防XSS、safeColor颜色校验）
@@ -49,16 +50,16 @@ WoodWhisper/
 │   │   │   └── HomepageUIBackground.jpg   # 全站宣纸肌理底图（body背景）
 │   │   ├── history/        # 历史页图片
 │   │   │   ├── woodbackground.jpg         # 历史页木质背景
-│   │   │   └── 历史页UI元素参考/           # 25张展品图片(1-25)
+│   │   │   └── optimized/                   # 20组展品图，WebP优先、JPG回退
 │   │   ├── inherit/        # 传承页图片
 │   │   │   ├── wood_ring_base_clean.jpg   # 年轮木板底图
 │   │   │   ├── paper_input_box_base_16x9.jpg # 输入框宣纸背景
 │   │   │   ├── inherit_composite_bg_clean_from_screenshot.jpg # 传承页整页背景
 │   │   │   ├── modal_carve_bg_dark_clea.jpg # 镌刻弹窗暗色背景
-│   │   │   ├── 陈培臣.jpg / 辜柳希.jpg / 金子松.jpg / 李得浓.jpg # 大师头像
+│   │   │   ├── 大师头像（公开肖像）         # 无公开肖像者使用文字占位
 │   │   └── ai/             # AI页图片
 │   │       └── 数字IP正视图.png            # AI数字人"小匠"形象
-│   └── audio/              # 音频目录（预留，古琴曲待添加）
+│   └── text/               # AI页使用的本地文字素材
 │
 ├── 📁 docs/                # 项目文档（设计报告、蓝图等）
 │   ├── BLUEPRINT.md                    # 项目开发蓝图/规范
@@ -129,8 +130,8 @@ WoodWhisper/
 - **交互**：左右滑动/点击时间轴切换朝代，长按显示冷门小故事
 
 ### 4.3 传承页 (inherit.html) ⭐最复杂
-- **功能**：4位国家级匠人卡片、年轮镌刻交互（一键镌刻/亲手镌刻）、分享
-- **核心数据**：`MASTERS`数组（4位大师）
+- **功能**：18位大师卡片、年轮镌刻交互（一键镌刻/亲手镌刻）、分享和详情弹窗
+- **核心数据**：`MASTERS`数组（18位大师）；无公开肖像者使用 `portrait: false`
 - **关键函数**：
   - `escapeHtml(s)` - XSS防护
   - `safeColor(color)` - CSS颜色校验
@@ -141,16 +142,14 @@ WoodWhisper/
 - **镌刻逻辑**：手动模式需画3条线（`manualLinesCount`计数），画痕存入`manualAllPaths`数组
 
 ### 4.4 AI数字人页 (ai.html)
-- **功能**：DeepSeek AI对话、语音识别输入、语音合成朗读
-- **⚠️ API配置**：需配置`DEEPSEEK_API_KEY`才能使用真实AI回复，否则使用本地兜底话术
+- **功能**：通过同源 `/api/chat` 请求 AI、语音识别输入、语音合成朗读
+- **安全规则**：API Key 只放在 Python 服务或 EdgeOne Function 的 `DEEPSEEK_API_KEY` 环境变量中，浏览器不保存密钥
 - **关键函数**：`sendToDeepSeek(messages)`、`startVoiceRecognition()`、`speak(text)`
-- **降级策略**：未配置Key时返回预设木雕知识回答
+- **本地预览差异**：Node 静态预览不提供 `/api/chat`；真实 AI 回复需使用 Python 服务或生产函数
 
-### 4.5 匠人详情页 (master.html)
-- **功能**：12位匠人（国家+省级+民间）卡片列表、从传承页跳转查看详情
-- **核心数据**：`masters`数组（12位匠人对象）
-- **URL参数**：`?name=陈培臣` 指定初始高亮匠人
-- **关键函数**：`escapeHtml(s)`、`safeColor(color)`、`renderMasters()`
+### 4.5 备用大师页 (master.html)
+- **功能**：保留旧入口并重定向到 `inherit.html`，避免重复维护两套大师数据
+- **当前数据源**：`js/inherit-data.js` 中的 18 位大师
 
 ---
 
@@ -170,7 +169,7 @@ WoodWhisper/
 1. **XSS防护**：所有用户输入/动态数据插入`innerHTML`前必须用`escapeHtml()`转义
 2. **纯文本优先**：只用`textContent`不用`innerHTML`来设置纯文字
 3. **CSS注入防护**：颜色值用正则`/^#[0-9A-Fa-f]{6}$/`校验，不合法返回默认色
-4. **API Key**：禁止硬编码真实密钥，当前占位符为`YOUR_DEEPSEEK_API_KEY_HERE`
+4. **API Key**：禁止写入 HTML、JavaScript、部署包或 Git；仅从服务端环境变量 `DEEPSEEK_API_KEY` 读取
 
 ### 5.3 路径规范
 - 所有路径使用**相对路径**
@@ -190,7 +189,7 @@ WoodWhisper/
 cd d:\traeproject\WoodWhisper
 py -3 server/start_server.py
 ```
-启动后浏览器打开：**http://localhost:8124**
+启动后浏览器打开：**http://127.0.0.1:8124**
 
 ### 方式三：仅预览静态页面（无需 Python）
 
@@ -206,10 +205,10 @@ npm run preview
 
 ## 七、修改代码注意事项
 
-1. **不要改动CSS类名**：style.css中的类名被多个页面共用
+1. **不要随意改动公共CSS类名**：`style.css`中的类名被多个页面共用
 2. **新增图片**：放到`assets/images/{对应页面}/`目录下
 3. **新增页面**：在根目录创建HTML，引入`css/style.css`，复用`.bottom-nav`结构
-4. **测试路径**：修改任何路径后，启动服务器在Network面板确认无404
+4. **测试路径**：修改任何路径后，运行 `npm run check:deploy` 和 `npm run test:smoke`，再在 Network 面板确认无404
 5. **导航栏一致性**：修改导航栏样式需在所有5个页面验证效果一致
 6. **移动端优先**：先写手机样式，用`@media (min-width: 640px)`写桌面端增强
 
