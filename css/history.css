@@ -8,7 +8,7 @@
       max-width: calc(100vh * 9/16);
       margin: 0 auto;
       width: 100%;
-      background: url('assets/images/history/woodbackground.jpg') center top / cover no-repeat fixed;
+      background: url('../assets/images/history/woodbackground.jpg') center top / cover no-repeat fixed;
       position: relative;
       padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
       overflow-x: hidden;
