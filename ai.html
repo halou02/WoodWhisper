@@ -352,6 +352,7 @@
    *   querySelector 会返回 null，后续 .classList 直接报错。
    *   验证：console.log(digitalHuman) 应打印 <img> 元素，不是 null。
    * ============================================================ */
+  const aiPage = document.querySelector('.page--ai');            // AI页容器（输入态停靠逻辑用）
   const digitalHuman = document.querySelector('.ai-avatar');      // 数字人图（要加说话动画）
   const chatBox = document.getElementById('chatBox');             // 对话区（要往里塞气泡）
   const recordBtn = document.getElementById('voiceBtn');          // 语音/发送按钮（新ID）
@@ -368,6 +369,32 @@
   const aiPrivacyCancel = document.getElementById('aiPrivacyCancel');
   let isSendMode = false;  // 当前按钮是否是发送模式（有文字时）
   let isAiBusy = false;
+
+
+  /* 输入态停靠：键盘弹出时输入栏贴键盘上沿，隐藏底部导航，聊天滚到最新 */
+  (function () {
+    if (!window.visualViewport) return; // 老浏览器无此 API，静默降级为原生行为
+    const vv = window.visualViewport;
+    const keyboardSpace = function () {
+      // 键盘高度 = 布局视口高度 - 可视视口底边（offsetTop 修正 iOS 平移）
+      return Math.max(0, document.documentElement.clientHeight - vv.height - vv.offsetTop);
+    };
+    const syncKeyboard = function () {
+      aiPage.style.setProperty('--kb-height', keyboardSpace() + 'px');
+    };
+    vv.addEventListener('resize', syncKeyboard);
+    vv.addEventListener('scroll', syncKeyboard);
+    chatInput.addEventListener('focus', function () {
+      aiPage.classList.add('is-typing');
+      syncKeyboard();
+      // 聊天区滚到最新消息
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
+    chatInput.addEventListener('blur', function () {
+      aiPage.classList.remove('is-typing');
+      aiPage.style.setProperty('--kb-height', '0px');
+    });
+  })();
 
 
   /* ============================================================
