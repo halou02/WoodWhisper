@@ -344,6 +344,8 @@
       border-radius: 16px;
       flex-shrink: 0;
       box-shadow: var(--shadow-card);
+      transition: transform 0.25s ease;
+      will-change: transform;
     }
     .ai-input-bar__icon-btn {
       width: 42px;
@@ -386,6 +388,14 @@
     .ai-input-bar__text:focus {
       border-color: var(--color-gold);
       background: #FFFBF0;
+    }
+
+    /* ========== 输入态：键盘弹出时输入栏停靠键盘上沿，隐藏底部导航 ========== */
+    .page--ai.is-typing .ai-input-bar {
+      transform: translateY(calc(-1 * var(--kb-height, 0px)));
+    }
+    .page--ai.is-typing .bottom-nav {
+      display: none;
     }
 
     /* 语音/发送按钮 */
