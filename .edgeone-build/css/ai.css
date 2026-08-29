@@ -2,15 +2,16 @@
 
     /* ========== 页面容器：复用 style.css 的 .page 类 ========== */
     /*
-      新手易错点：9:16竖屏锁定用 max-width: calc(100vh * 9/16)，
+      新手易错点：9:16竖屏锁定用 max-width: calc(var(--app-height, 100vh) * 9/16)，
+      宽度/高度改用 JS 冻结的 --app-height（ai.html 加载时冻结一次），
+      避免软键盘弹出时 100vh/100dvh 重算、视口高度骤降导致页面压缩变窄。
       让 .page 自然居中，宽屏时左右留白显示 body 的宣纸背景（不再是黑色填充）。
       底部加 padding 给 fixed 导航栏留空间
     */
     .page--ai {
-      max-width: calc(100vh * 9/16);
+      max-width: calc(var(--app-height, 100vh) * 9/16);
       margin: 0 auto;
-      height: 100vh;
-      height: 100dvh;
+      height: var(--app-height, 100dvh);
       display: flex;
       flex-direction: column;
       position: relative;

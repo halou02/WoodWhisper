@@ -320,6 +320,28 @@
 - 单次回答控制在 300 字以内，便于 TTS 朗读。`;
 
 
+  /* 冻结视口高度：防止软键盘弹出时 100vh/100dvh 重算导致页面压缩变窄 */
+  (function () {
+    var appHeight = window.innerHeight;
+    var lastWidth = window.innerWidth;
+    document.documentElement.style.setProperty('--app-height', appHeight + 'px');
+    window.addEventListener('resize', function () {
+      // 键盘弹出/收起只改变高度；仅当宽度变化（旋转/分屏）时才更新冻结值
+      if (window.innerWidth !== lastWidth) {
+        lastWidth = window.innerWidth;
+        appHeight = window.innerHeight;
+        document.documentElement.style.setProperty('--app-height', appHeight + 'px');
+      }
+    });
+    window.addEventListener('orientationchange', function () {
+      setTimeout(function () {
+        lastWidth = window.innerWidth;
+        appHeight = window.innerHeight;
+        document.documentElement.style.setProperty('--app-height', appHeight + 'px');
+      }, 200);
+    });
+  })();
+
   /* ============================================================
    * 【DOM 抓取区】把页面要用到的元素提前抓出来缓存
    * ------------------------------------------------------------
@@ -810,13 +832,6 @@
     if (e.key === ' ' && !isSendMode) {
       stopRecord();
     }
-  });
-
-  // 输入框聚焦时滚动到可见位置（键盘弹出适配）
-  chatInput.addEventListener('focus', function() {
-    setTimeout(() => {
-      chatInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 300);
   });
 
 

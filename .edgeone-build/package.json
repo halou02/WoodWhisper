@@ -4,6 +4,9 @@
   "private": true,
   "description": "潮州木雕数智非遗传承 H5",
   "scripts": {
-    "preview": "node scripts/serve-static.mjs"
+    "build:deploy": "node scripts/build-deploy.mjs",
+    "preview": "node scripts/serve-static.mjs",
+    "check:deploy": "node scripts/check-deploy.mjs",
+    "test:smoke": "node scripts/smoke-test.mjs"
   }
 }
