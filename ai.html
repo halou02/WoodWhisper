@@ -64,9 +64,26 @@
 
     <!-- 数字人舞台区 -->
     <section class="ai-stage">
+      <!-- 蟹篓镂空纹样水印：极淡缓转，填充舞台框留白（CSS 控制 opacity 与 120s 旋转） -->
+      <div class="stage-watermark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16M6.3 6.3l11.4 11.4M17.7 6.3L6.3 17.7"/><circle cx="12" cy="12" r="4.5"/>
+        </svg>
+      </div>
+      <!-- 四角金色卷草角饰（样式见 css/ai.css） -->
+      <span class="stage-corner stage-corner--tl" aria-hidden="true"></span>
+      <span class="stage-corner stage-corner--tr" aria-hidden="true"></span>
+      <span class="stage-corner stage-corner--bl" aria-hidden="true"></span>
+      <span class="stage-corner stage-corner--br" aria-hidden="true"></span>
       <div class="ai-avatar-wrap">
         <!-- 呼吸光晕 -->
         <div class="ai-avatar-glow"></div>
+        <!-- 金环：两段金色弧线+小金珠，CSS 控制 60s 缓转（纯圆环旋转不可见，故带缺口与珠） -->
+        <svg class="ai-avatar-ring" viewBox="0 0 120 120" fill="none" aria-hidden="true">
+          <circle cx="60" cy="60" r="56" stroke="#C9A227" stroke-width="2" stroke-linecap="round" stroke-dasharray="150 80" stroke-dashoffset="30" opacity="0.85"/>
+          <circle cx="60" cy="60" r="56" stroke="#E8C66B" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="40 190" stroke-dashoffset="-60" opacity="0.6"/>
+          <circle cx="60" cy="4" r="3.2" fill="#C9A227"/>
+        </svg>
         <!-- 数字人图片：圆形+鎏金边框 -->
         <img class="ai-avatar digital-human" src="assets/images/ai/数字IP正视图.png" alt="潮州木雕AI数字人小匠">
       </div>
@@ -1081,23 +1098,17 @@
       bubble.className = 'chat__bubble chat__bubble--' + type;
 
       if (type === 'ai') {
-        // AI气泡：用文本节点放文字，后面追加AIGC标签
+        // AI气泡：用文本节点放文字，后面追加尾部徽记
         // 新手易错点：用文本节点而不是innerHTML，防XSS；也方便后面替换文字
         const textNode = document.createTextNode(text);
         bubble.appendChild(textNode);
-        // AIGC标签（合规要求：AI生成内容需显式标识）
-        const aigcTag = document.createElement('span');
-        aigcTag.className = 'aigc-tag';
-        aigcTag.textContent = 'AIGC';
-        bubble.appendChild(aigcTag);
-        // 「小匠」落款印章（仿古钤印装饰）
-        // 说明：thinking→最终回复的替换机制是整泡替换（hideThinking 新建 AI 气泡、
-        // 移除思考气泡），不原地改写气泡文本，因此这里直接在气泡末尾追加印章
-        // 不会影响该机制；思考气泡（type==='thinking'）不加印章，走上面分支。
-        const seal = document.createElement('span');
-        seal.className = 'chat__seal';
-        seal.textContent = '小匠';
-        bubble.appendChild(seal);
+        // 尾部金漆小徽记：图形化 AI 生成标识（替代旧 AIGC 文字与文字印章）
+        const mark = document.createElement('span');
+        mark.className = 'chat__mark';
+        mark.setAttribute('role', 'img');
+        mark.setAttribute('aria-label', 'AI 生成内容');
+        mark.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M9 15.5l6-7M10.5 8.5h4.5V13"/></svg>';
+        bubble.appendChild(mark);
       } else {
         // 用户气泡：直接放文字
         bubble.textContent = text;
