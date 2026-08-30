@@ -97,6 +97,28 @@
     .stage-corner--tr { top: 6px; right: 6px; border-top: 2px solid rgba(201,162,39,.75); border-right: 2px solid rgba(201,162,39,.75); border-top-right-radius: 10px; }
     .stage-corner--bl { bottom: 6px; left: 6px; border-bottom: 2px solid rgba(201,162,39,.75); border-left: 2px solid rgba(201,162,39,.75); border-bottom-left-radius: 10px; }
     .stage-corner--br { bottom: 6px; right: 6px; border-bottom: 2px solid rgba(201,162,39,.75); border-right: 2px solid rgba(201,162,39,.75); border-bottom-right-radius: 10px; }
+    /* 舞台披带：头像两侧对称金色卷草带，向两侧渐隐（不设 z-index，靠 DOM 顺序位于水印之上、头像之下） */
+    .stage-sash {
+      position: absolute;
+      top: 50%;
+      width: 30%;
+      max-width: 130px;
+      color: rgba(201, 162, 39, 0.65);
+      pointer-events: none;
+      transform: translateY(-50%);
+    }
+    .stage-sash svg { width: 100%; height: auto; display: block; }
+    /* 靠头像一端实、远端渐隐：左带右端实（90deg），右带左端实（270deg）；右侧 SVG 已内联 scaleX(-1)，此处不重复翻转 */
+    .stage-sash--left {
+      left: 4%;
+      -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
+      mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
+    }
+    .stage-sash--right {
+      right: 4%;
+      -webkit-mask-image: linear-gradient(270deg, transparent 0%, #000 45%);
+      mask-image: linear-gradient(270deg, transparent 0%, #000 45%);
+    }
     /* 头像细金环：外圈金边+柔光晕 */
     .ai-avatar-wrap {
       position: relative;
@@ -237,11 +259,11 @@
     /* 气泡尾部金漆小徽记：图形化 AI 生成标识 */
     .chat__mark {
       display: inline-flex;
-      width: 12px;
-      height: 12px;
+      width: 13px;
+      height: 13px;
       margin-left: 8px;
       vertical-align: -1px;
-      color: rgba(201, 162, 39, 0.9);
+      color: rgba(201, 162, 39, 0.95);
       opacity: 0.85;
     }
     .chat__mark svg { width: 100%; height: 100%; }
@@ -263,9 +285,9 @@
       content: "";
       position: absolute;
       right: -38px;
-      bottom: 0;
-      width: 30px;
-      height: 30px;
+      top: 0;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       background:
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23FBF3E4' stroke='%23C9A227' stroke-width='1'/%3E%3Cg fill='none' stroke='%238B5E3C' stroke-width='1.4' stroke-linecap='round'%3E%3Cpath d='M11 15h10l-1.2 3.4a4 4 0 0 1-3.8 2.6h0a4 4 0 0 1-3.8-2.6z'/%3E%3Cpath d='M14.5 15c0-2 1.5-2.4 1.5-4M18 15c0-1.6 1-2 1-3.2'/%3E%3Cellipse cx='16' cy='22.5' rx='7.5' ry='1.4'/%3E%3C/g%3E%3C/svg%3E") center/100% 100% no-repeat;

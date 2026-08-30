@@ -75,6 +75,17 @@
       <span class="stage-corner stage-corner--tr" aria-hidden="true"></span>
       <span class="stage-corner stage-corner--bl" aria-hidden="true"></span>
       <span class="stage-corner stage-corner--br" aria-hidden="true"></span>
+      <!-- 对称纹样披带：头像两侧金色卷草带，向两侧渐隐（样式见 css/ai.css） -->
+      <div class="stage-sash stage-sash--left" aria-hidden="true">
+        <svg viewBox="0 0 90 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M2 12h58"/><path d="M8 12c6-7 14-7 20 0s14 7 20 0"/><circle cx="84" cy="12" r="2.4" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+      <div class="stage-sash stage-sash--right" aria-hidden="true">
+        <svg viewBox="0 0 90 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" style="transform: scaleX(-1)">
+          <path d="M2 12h58"/><path d="M8 12c6-7 14-7 20 0s14 7 20 0"/><circle cx="84" cy="12" r="2.4" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
       <div class="ai-avatar-wrap">
         <!-- 呼吸光晕 -->
         <div class="ai-avatar-glow"></div>
@@ -1107,7 +1118,7 @@
         mark.className = 'chat__mark';
         mark.setAttribute('role', 'img');
         mark.setAttribute('aria-label', 'AI 生成内容');
-        mark.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M9 15.5l6-7M10.5 8.5h4.5V13"/></svg>';
+        mark.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M10.5 3.5c.9 3.8 2.2 5.1 6 6-3.8.9-5.1 2.2-6 6-.9-3.8-2.2-5.1-6-6 3.8-.9 5.1-2.2 6-6z"/><path d="M18 14.5c.45 1.9 1.1 2.55 3 3-1.9.45-2.55 1.1-3 3-.45-1.9-1.1-2.55-3-3 1.9-.45 2.55-1.1 3-3z"/></svg>';
         bubble.appendChild(mark);
       } else {
         // 用户气泡：直接放文字
