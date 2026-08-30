@@ -97,27 +97,34 @@
     .stage-corner--tr { top: 6px; right: 6px; border-top: 2px solid rgba(201,162,39,.75); border-right: 2px solid rgba(201,162,39,.75); border-top-right-radius: 10px; }
     .stage-corner--bl { bottom: 6px; left: 6px; border-bottom: 2px solid rgba(201,162,39,.75); border-left: 2px solid rgba(201,162,39,.75); border-bottom-left-radius: 10px; }
     .stage-corner--br { bottom: 6px; right: 6px; border-bottom: 2px solid rgba(201,162,39,.75); border-right: 2px solid rgba(201,162,39,.75); border-bottom-right-radius: 10px; }
-    /* 舞台披带：头像两侧对称金色卷草带，向两侧渐隐（不设 z-index，靠 DOM 顺序位于水印之上、头像之下） */
+    /* 舞台披带：头像两侧对称缠枝花叶雕花带，向两侧渐隐（不设 z-index，靠 DOM 顺序位于水印之上、头像之下） */
     .stage-sash {
       position: absolute;
       top: 50%;
       width: 30%;
-      max-width: 130px;
+      max-width: 140px;
       color: rgba(201, 162, 39, 0.65);
       pointer-events: none;
       transform: translateY(-50%);
     }
     .stage-sash svg { width: 100%; height: auto; display: block; }
+    /* 披带轻呼吸：整带极缓明暗+微沉浮，左右相位错开；transform 须保留 translateY(-50%) 基准，否则披带垂直错位 */
+    @keyframes sashBreath {
+      0%, 100% { opacity: 1; transform: translateY(-50%); }
+      50% { opacity: 0.75; transform: translateY(calc(-50% + 1.5px)); }
+    }
     /* 靠头像一端实、远端渐隐：左带右端实（90deg），右带左端实（270deg）；右侧 SVG 已内联 scaleX(-1)，此处不重复翻转 */
     .stage-sash--left {
       left: 4%;
       -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
       mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
+      animation: sashBreath 7s ease-in-out infinite;
     }
     .stage-sash--right {
       right: 4%;
       -webkit-mask-image: linear-gradient(270deg, transparent 0%, #000 45%);
       mask-image: linear-gradient(270deg, transparent 0%, #000 45%);
+      animation: sashBreath 7s ease-in-out infinite 3.5s;
     }
     /* 头像细金环：外圈金边+柔光晕 */
     .ai-avatar-wrap {
@@ -761,4 +768,6 @@
       .ai-avatar-ring, .stage-watermark { animation: none !important; }
       /* 关闭呼吸光晕：补静态透明度兜底，否则失去关键帧后 opacity 会跳回 1 */
       .ai-avatar-glow { animation: none !important; opacity: 0.55; }
+      /* 关闭披带轻呼吸（静态保留缠枝花叶纹样外观） */
+      .stage-sash { animation: none !important; }
     }
