@@ -28,6 +28,9 @@
     var modalName = document.getElementById('modalName');
     var modalLevel = document.getElementById('modalLevel');
     var modalStory = document.getElementById('modalStory');
+    var modalLineage = document.getElementById('modalLineage');       // 传承脉络区容器（无数据时 hidden）
+    var modalLineageChips = document.getElementById('modalLineageChips'); // 关系 chips 挂载点
+    var modalPanel = document.querySelector('#masterModal .inherit-modal__panel'); // 弹窗面板（切换匠人时重播淡入动画）
     var triviaBubble = document.getElementById('triviaBubble');
     var particlesContainer = document.getElementById('particlesContainer');
     var parallaxOverlay = document.getElementById('parallaxOverlay');
@@ -90,40 +93,55 @@
     var lastMasterTrigger = null;    // 关闭人物详情后恢复焦点
     var lastRingTrigger = null;      // 关闭年轮互动后恢复焦点
 
-    // ===== 【渲染层】渲染匠人卡片 =====
-    // 在干什么：遍历 MASTERS 数组，每张卡片生成 HTML 拼进滚动容器。
-    // 数据从哪来：MASTERS 数组。
+    // ===== 【渲染层】渲染匠人卡片（三份克隆，支撑无缝循环）=====
+    // 在干什么：把 MASTERS 渲染 3 遍（COPY_COUNT，见下方【循环回路】节），共 54 张卡片拼进
+    //   滚动容器，形成 [份0][份1][份2] 首尾相接的内容；用户始终浏览中间份，两端各留一整份
+    //   作循环缓冲，滑出缓冲区前由 scroll 事件里的 normalizeLoopScroll() 无感重置回中间份。
+    // 数据从哪来：MASTERS 数组（渲染 3 遍，数据本身只有一份）。
     // 数据去哪：变成 DOM 显示在 .inherit-cards-scroll 里。
     //
     // 新手易错点：
+    //   - 卡片宽度 / gap / scroll-snap-align 全部由 CSS 类决定，克隆卡不加任何内联样式，
+    //     CSS 与 scroll-snap 吸附行为零改动。
+    //   - data-index 存"原始 index"（0-17），三份克隆共用同一索引；所有通过 dataset.index
+    //     读取 MASTERS 的交互统一写 MASTERS[index % MASTERS.length]（见下方各交互处的取模）。
     //   - 图片用 loading="lazy" 懒加载，非首屏卡片不急于加载。
     //   - onerror 处理图片加载失败：用 div + 首字占位，不显示裂图。
-    //   验证：断网刷新页面，应看到首字占位而不是裂图。
+    //   验证：断网刷新页面，应看到首字占位而不是裂图；
+    //         document.querySelectorAll('#cardsScroll .inherit-card').length 应为 54。
     function renderCards() {
       var html = '';
-      MASTERS.forEach(function(m, index) {
-        var tagClass = 'inherit-card__tag';
-        if (m.level === 'national') tagClass += ' inherit-card__tag--national';
-        else if (m.level === 'provincial') tagClass += ' inherit-card__tag--provincial';
-        else if (m.level === 'folk') tagClass += ' inherit-card__tag--folk';
+      // 外层循环 3 份克隆；内层遍历 MASTERS。data-index 恒为原始 index（0-17）。
+      for (var copy = 0; copy < COPY_COUNT; copy++) {
+        // 可访问性收尾：用户实际浏览/交互的是中间份（copy === 1）；
+        //   第 0、2 份只是循环缓冲的视觉克隆，对读屏器隐藏（aria-hidden）并禁止 Tab 聚焦
+        //   （tabindex="-1"），避免同一张卡被朗读三遍、Tab 需按 54 次才能越过卡片区。
+        //   易错点：aria-hidden 元素若仍可聚焦会违反可达性规范，两者必须成对设置。
+        var a11yAttrs = (copy === 1) ? ' tabindex="0"' : ' aria-hidden="true" tabindex="-1"';
+        MASTERS.forEach(function(m, index) {
+          var tagClass = 'inherit-card__tag';
+          if (m.level === 'national') tagClass += ' inherit-card__tag--national';
+          else if (m.level === 'provincial') tagClass += ' inherit-card__tag--provincial';
+          else if (m.level === 'folk') tagClass += ' inherit-card__tag--folk';
 
-        html += ''
-          + '<div class="inherit-card" data-index="' + index + '" role="button" tabindex="0" aria-label="查看' + escapeHtml(m.name) + '的传承故事">'
-          +   '<div class="inherit-card__img-wrap">'
-          +     (m.portrait === false
-                ? '<div class="inherit-card__placeholder" aria-label="' + escapeHtml(m.name) + '暂无公开肖像">' + escapeHtml(m.initial) + '</div>'
-                : '<img class="inherit-card__img" src="' + escapeHtml(m.img) + '" alt="' + escapeHtml(m.name) + '" loading="lazy">')
-          +     '<div class="inherit-card__seal" aria-label="长按查看' + escapeHtml(m.name) + '小故事">' + escapeHtml(m.initial) + '</div>'
-          +   '</div>'
-          +   '<div class="inherit-card__info">'
-          +     '<h3 class="inherit-card__name">' + escapeHtml(m.name) + '</h3>'
-          +     '<span class="' + tagClass + '">'
-          +       '<span class="inherit-card__tag-line">潮州木雕</span>'
-          +       '<span class="inherit-card__tag-line">传承人</span>'
-          +     '</span>'
-          +   '</div>'
-          + '</div>';
-      });
+          html += ''
+            + '<div class="inherit-card" data-index="' + index + '" role="button"' + a11yAttrs + ' aria-label="查看' + escapeHtml(m.name) + '的传承故事">'
+            +   '<div class="inherit-card__img-wrap">'
+            +     (m.portrait === false
+                  ? '<div class="inherit-card__placeholder" aria-label="' + escapeHtml(m.name) + '暂无公开肖像">' + escapeHtml(m.initial) + '</div>'
+                  : '<img class="inherit-card__img" src="' + escapeHtml(m.img) + '" alt="' + escapeHtml(m.name) + '" loading="lazy">')
+            +     '<div class="inherit-card__seal" aria-label="长按查看' + escapeHtml(m.name) + '小故事">' + escapeHtml(m.initial) + '</div>'
+            +   '</div>'
+            +   '<div class="inherit-card__info">'
+            +     '<h3 class="inherit-card__name">' + escapeHtml(m.name) + '</h3>'
+            +     '<span class="' + tagClass + '">'
+            +       '<span class="inherit-card__tag-line">潮州木雕</span>'
+            +       '<span class="inherit-card__tag-line">传承人</span>'
+            +     '</span>'
+            +   '</div>'
+            + '</div>';
+        });
+      }
       cardsScroll.innerHTML = html;
 
       // 给每张图片绑定回退，占位符只在图片确实加载失败时出现。
@@ -132,15 +150,16 @@
         img.onerror = function() {
           var card = this.closest('.inherit-card');
           var idx = parseInt(card.getAttribute('data-index'), 10);
-          if (isNaN(idx) || !MASTERS[idx]) return;
+          // 取模兜底：data-index 存的是原始 index（0-17），三份克隆共用，取模映射回 MASTERS
+          if (isNaN(idx) || !MASTERS[idx % MASTERS.length]) return;
           var placeholder = document.createElement('div');
           placeholder.className = 'inherit-card__placeholder';
-          placeholder.textContent = MASTERS[idx].initial;
+          placeholder.textContent = MASTERS[idx % MASTERS.length].initial;
           this.replaceWith(placeholder);
         };
       });
 
-      // 初始默认居中卡片：动态查找 defaultCenter 标记的匠人（辜柳希，index=1）
+      // 初始默认居中卡片：动态查找 defaultCenter 标记的匠人（陈培臣，index=4）
       // 人话讲：这里必须用"双重 requestAnimationFrame"来延时，不能立即执行。
       //   浏览器会把 innerHTML、scrollIntoView、classList 修改全部攒在一起批量处理，
       //   如果在同一个渲染帧内既创建元素又添加 featured 类，浏览器会认为 featured 状态
@@ -153,7 +172,7 @@
       //   - 单个 rAF 可能还在同一批渲染中，双重 rAF 才能确保至少一帧已绘制；
       //   - scrollIntoView 会触发 scroll 事件，scroll 事件里也会调用 updateFeaturedCard，
       //     所以最终效果是：先滚动到位，然后焦点类正确添加并播放过渡动画。
-      //   验证：页面加载后，辜柳希卡片应在正中央，比其他卡片大且亮，过渡动画自然完成。
+      //   验证：页面加载后，陈培臣卡片应在正中央，比其他卡片大且亮，过渡动画自然完成。
       var defaultIndex = MASTERS.findIndex(function(m) { return m.defaultCenter; });
       if (defaultIndex === -1) defaultIndex = 1;
 
@@ -165,8 +184,13 @@
       // 初始化阶段卡片容器带 .inherit-cards-scroll--init 类（transition:none），
       // 所以焦点状态的应用是瞬间跳变，不会出现动画卡死问题。
       setTimeout(function() {
-        // 找真实区（非克隆）的默认卡片，避免 querySelector 选到前缀克隆里的同名卡片
-        var defaultCard = cardsScroll.querySelector('.inherit-card[data-index="' + defaultIndex + '"]');
+        // 三份克隆下同名卡片有 3 张，querySelectorAll 按 DOM 顺序取索引 1 = 中间份。
+        // 人话讲：初始必须定位到"中间份"的默认卡片——左右各留一整份缓冲，用户无论先往左
+        //   还是往右滑，都会先进入缓冲区被无感重置回中间份，而不是撞到硬边界断头。
+        //   效果等价于"旧公式 targetScrollLeft + 单份宽度偏移"，但直接选中中间份的卡片、
+        //   复用同一套 offsetLeft 居中公式更稳，不怕两套算法对不齐。
+        var defaultCards = cardsScroll.querySelectorAll('.inherit-card[data-index="' + defaultIndex + '"]');
+        var defaultCard = defaultCards[1]; // 中间份（共 COPY_COUNT=3 份，索引 1）
         if (defaultCard) {
           // 不用 scrollIntoView（会被 scroll-snap 干扰跳错位置），
           // 直接精确计算 scrollLeft = 卡片左偏移 - (容器宽 - 卡片宽)/2，使卡片居中
@@ -240,15 +264,74 @@
       featuredTicking = false;
     }
 
+    // ===== 【循环回路】scrollLeft 无感重置（三份克隆循环的核心）=====
+    // 原理：renderCards 已把卡片渲染成 [份0][份1][份2] 三份一模一样的内容（共 54 张），
+    //   用户正常浏览时停留在中间份（份1）。当 scrollLeft 滑进左右缓冲区（即将滑出当前份
+    //   的边界）时，把 scrollLeft 瞬间平移一个"单份宽度"，落回中间份的等价位置。
+    //   三份内容像素级一致、平移前后视觉完全相同，肉眼零感知，于是形成"无缝循环"：
+    //   滑过郭奕辉继续前进就是黄开贤，反向滑过黄开贤就是郭奕辉。
+    //
+    // 阈值公式（copyWidth = 单份宽度 = 18 张卡 + 18 个 gap 的总长度）：
+    //   scrollLeft < copyWidth × 0.5  → scrollLeft += copyWidth（滑进左缓冲区 → 跳回中间份）
+    //   scrollLeft > copyWidth × 2.5  → scrollLeft -= copyWidth（滑进右缓冲区 → 跳回中间份）
+    //   取 0.5 / 2.5 是留出"半份缓冲"：比硬边界提前半份就重置，即使惯性甩动时单帧
+    //   scrollLeft 跳变几百像素也冲不出内容边界；且重置点前后都是"同一张卡居中"的等价位置。
+    //
+    // 新手易错点：
+    //   - 必须直接给 scrollLeft 赋值（瞬时跳变、无过渡），绝不能 scrollTo({behavior:'smooth'})，
+    //     否则用户会看见一次肉眼可见的"倒回去"。
+    //   - 单份宽度不能写死：卡片宽度是响应式的（≤360px 断点从 116px 变 108px，gap 也变），
+    //     必须实时测量 cards[18].offsetLeft - cards[0].offsetLeft——即"同一张卡在相邻两份里
+    //     的布局坐标差"，天然排除容器 padding 和 gap 的干扰。结果做缓存，resize 时清零重测。
+    //   - scroll-snap（mandatory）不会捣乱：重置落点与最近吸附点相差不足一个卡位，
+    //     浏览器吸附回去的仍是视觉上同一张卡。
+    //   - 重置赋值会再触发一次 scroll 事件 → 再次进入本函数 → 此时 scrollLeft 已回到
+    //     合法区间，两个条件都不成立，不会死循环。
+    //   - iOS 惯性滚动进行中程序赋值 scrollLeft 偶尔会被系统忽略：无妨，惯性期间 scroll
+    //     事件持续触发，下一帧条件仍满足会自动重试，直到重置成功。
+    //   验证：一直往右滑过郭奕辉，黄开贤应无缝接续且 featured 放大正常；反向亦然；
+    //         全程不应出现白屏、跳变或吸附错位。
+    var COPY_COUNT = 3;    // 克隆份数：三份是"无缝循环"的最小配置（前缓冲 + 当前 + 后缓冲）
+    var loopCopyWidth = 0; // 单份宽度缓存（0 = 未测量或已失效，需重测）
+
+    function measureCopyWidth() {
+      if (loopCopyWidth > 0) return loopCopyWidth;
+      var cards = cardsScroll.querySelectorAll('.inherit-card');
+      // 至少要有两份才能测"相邻两份同一张卡的距离"；不足说明渲染异常，返回 0 跳过重置
+      if (cards.length >= MASTERS.length * 2) {
+        loopCopyWidth = cards[MASTERS.length].offsetLeft - cards[0].offsetLeft;
+      }
+      return loopCopyWidth;
+    }
+
+    // 窗口尺寸变化（旋转屏幕、跨过 360px 响应式断点）后旧宽度缓存失效，清零触发重测
+    window.addEventListener('resize', function() { loopCopyWidth = 0; });
+
+    function normalizeLoopScroll() {
+      var copyWidth = measureCopyWidth();
+      if (copyWidth <= 0) return;
+
+      if (cardsScroll.scrollLeft < copyWidth * 0.5) {
+        // 滑进左缓冲区（正在看份0 的卡片）→ 右移一份，落回份1 的等价位置
+        cardsScroll.scrollLeft += copyWidth;
+      } else if (cardsScroll.scrollLeft > copyWidth * 2.5) {
+        // 滑进右缓冲区（正在看份2 的卡片）→ 左移一份，落回份1 的等价位置
+        cardsScroll.scrollLeft -= copyWidth;
+      }
+    }
+
     // 监听卡片容器的 scroll 事件，用 rAF 节流
     // 新手易错点：这里监听的是 cardsScroll 的 scroll 事件（横向滚动），
     //   不是 window 的 scroll（竖向滚动）。不要搞混。
-    // 卡片只保留一组真实数据，避免重复 DOM 和无障碍朗读。
+    // 卡片数据只在 MASTERS 里保留一份；DOM 克隆三份仅为无缝循环服务，交互一律按原始 index 取模映射。
 
-    // scroll 事件中更新焦点卡片（rAF 节流，保证流畅）
+    // scroll 事件中：先无感重置循环位置，再更新焦点卡片（rAF 节流，保证流畅）
     cardsScroll.addEventListener('scroll', function() {
       if (!featuredTicking) {
-        requestAnimationFrame(updateFeaturedCard);
+        requestAnimationFrame(function() {
+          normalizeLoopScroll(); // ① 先无感重置循环（会改变 scrollLeft，必须在前）
+          updateFeaturedCard();  // ② 再基于重置后的位置计算焦点卡
+        });
         featuredTicking = true;
       }
     });
@@ -261,7 +344,7 @@
       var card = e.target.closest('.inherit-card');
       if (!card) return;
       var index = parseInt(card.getAttribute('data-index'), 10);
-      var m = MASTERS[index];
+      var m = MASTERS[index % MASTERS.length]; // 取模兜底：克隆卡 data-index 已是原始 0-17
       if (!m) return;
       lastMasterTrigger = card;
        openMasterModal(m);
@@ -273,9 +356,9 @@
       if (!card || e.target.closest('.inherit-card__seal')) return;
       e.preventDefault();
       var index = parseInt(card.getAttribute('data-index'), 10);
-      if (!MASTERS[index]) return;
+      if (!MASTERS[index % MASTERS.length]) return;
       lastMasterTrigger = card;
-      openMasterModal(MASTERS[index]);
+      openMasterModal(MASTERS[index % MASTERS.length]);
     });
 
     // ===== 【交互层】手势方向识别 + 长按检测 =====
@@ -318,7 +401,7 @@
         var index = parseInt(card.getAttribute('data-index'), 10);
         longPressTimer = setTimeout(function() {
           longPressTriggered = true;
-          showTrivia(MASTERS[index].trivia);
+          showTrivia(MASTERS[index % MASTERS.length].trivia);
         }, LONG_PRESS_DURATION);
       }
     }, { passive: true });
@@ -378,7 +461,7 @@
         var index = parseInt(card.getAttribute('data-index'), 10);
         longPressTimer = setTimeout(function() {
           longPressTriggered = true;
-          showTrivia(MASTERS[index].trivia);
+          showTrivia(MASTERS[index % MASTERS.length].trivia);
         }, LONG_PRESS_DURATION);
       }
     });
@@ -482,6 +565,23 @@
       else if (m.level === 'provincial') modalLevel.classList.add('inherit-modal__level--provincial');
       else if (m.level === 'folk') modalLevel.classList.add('inherit-modal__level--folk');
       modalStory.textContent = m.story;
+
+      // 师承脉络：按当前匠人查 LINEAGE 渲染 chips（无数据则整块隐藏）
+      renderLineage(m);
+
+      // 切换匠人时重置面板滚动位置：story 长短不一，若不重置，
+      //   从长文切到短文会停在半截空白处，像"内容丢了"。
+      modalPanel.scrollTop = 0;
+
+      // 重播内容淡入上浮动效（打开弹窗与 chip 穿梭切换共用同一段代码）。
+      // 易错点：只是"移除类再添加类"而不强制 reflow，浏览器会把同一帧内的
+      //   两次类名修改合并处理，动画不会重播（看起来像没动）。
+      //   正确做法：移除后插入 void modalPanel.offsetWidth 强制浏览器立即
+      //   计算一次布局（reflow），动画状态被真正清零，再添加类才会从头播放。
+      modalPanel.classList.remove('inherit-modal__panel--enter');
+      void modalPanel.offsetWidth; // 强制 reflow，重置动画状态
+      modalPanel.classList.add('inherit-modal__panel--enter');
+
       masterModal.classList.add('inherit-modal--open');
       masterModal.setAttribute('aria-hidden', 'false');
       modalClose.focus();
@@ -489,6 +589,49 @@
       // 弹窗打开时绑 Esc 关闭
       document.addEventListener('keydown', onEscCloseModal);
     }
+
+    // ===== 【弹窗层】传承脉络 chips 渲染 =====
+    // 数据从哪来：js/inherit-data.js 末尾的全局 LINEAGE 表（键=匠人名，值=[{to, rel}]）。
+    // 渲染规则：chip 文案拼作「rel·to」（如「其子·陈培臣」），点击后按 to 名字
+    //   在 MASTERS 里找到对应对象并调 openMasterModal 穿梭切换（监听见下方事件委托）。
+    // 易错点：LINEAGE 键名必须与 MASTERS.name 逐字一致，查不到时区块整体 hidden，
+    //   千万别渲染一个空区块，否则弹窗底部会留一块空洞。
+    function renderLineage(m) {
+      var list = (typeof LINEAGE !== 'undefined') ? LINEAGE[m.name] : null;
+      if (list && list.length) {
+        var html = '';
+        for (var i = 0; i < list.length; i++) {
+          // animation-delay 内联到每个 chip 上，实现错峰淡入（每枚顺延 60ms），
+          //   由 CSS 的 inheritChipIn 动画配合播放（见 css/inherit.css 轻动效章节）。
+          html += ''
+            + '<button type="button" class="inherit-lineage-chip"'
+            + ' data-master-name="' + escapeHtml(list[i].to) + '"'
+            + ' style="animation-delay:' + (i * 60) + 'ms">'
+            + escapeHtml(list[i].rel + '·' + list[i].to)
+            + '</button>';
+        }
+        modalLineageChips.innerHTML = html;
+        modalLineage.hidden = false;
+      } else {
+        modalLineageChips.innerHTML = '';
+        modalLineage.hidden = true;
+      }
+    }
+
+    // chips 点击穿梭：事件委托在弹窗根节点上绑一次即可（chips 每次切换都重建，
+    //   若逐个绑定会重复挂监听、浪费且易漏）。点遮罩关闭的监听判断的是
+    //   e.target === masterModal，chip 点击不会误触关闭。
+    masterModal.addEventListener('click', function(e) {
+      var chip = e.target.closest('.inherit-lineage-chip');
+      if (!chip) return;
+      var name = chip.getAttribute('data-master-name');
+      for (var i = 0; i < MASTERS.length; i++) {
+        if (MASTERS[i].name === name) {
+          openMasterModal(MASTERS[i]);
+          return;
+        }
+      }
+    });
 
     function closeMasterModal() {
       masterModal.classList.remove('inherit-modal--open');

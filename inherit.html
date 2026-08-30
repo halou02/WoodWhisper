@@ -80,6 +80,20 @@
         <h3 class="inherit-modal__name" id="modalName"></h3>
         <span class="inherit-modal__level" id="modalLevel"></span>
         <p class="inherit-modal__story" id="modalStory"></p>
+
+        <!-- 传承脉络区：JS 依据 LINEAGE 数据填充关系 chips（点击可穿梭切换匠人）；
+             无师承数据时由 JS 置 hidden，布局不留空洞 -->
+        <div class="inherit-modal__lineage" id="modalLineage" hidden>
+          <h4 class="inherit-modal__lineage-title">
+            <!-- 金色小卷草纹符号：与页面纹样语言呼应，纯装饰故 aria-hidden -->
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+              <path d="M4 19c6 0 9.5-3.2 9.5-7.4 0-2.6-1.8-4.2-3.9-4.2-2 0-3.4 1.5-3.4 3.4 0 2.2 1.7 3.7 4.2 3.7 3.4 0 5.6-2.4 5.6-6V6.2c0-1.4 1-2.4 2.4-2.4"/>
+              <path d="M18.4 3.8c1.1 0 2 .8 2 1.9s-.9 2-2 2" opacity="0.75"/>
+            </svg>
+            传承脉络
+          </h4>
+          <div class="inherit-modal__lineage-chips" id="modalLineageChips"></div>
+        </div>
       </div>
     </div>
 
