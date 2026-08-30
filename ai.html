@@ -75,15 +75,89 @@
       <span class="stage-corner stage-corner--tr" aria-hidden="true"></span>
       <span class="stage-corner stage-corner--bl" aria-hidden="true"></span>
       <span class="stage-corner stage-corner--br" aria-hidden="true"></span>
-      <!-- 对称纹样披带：头像两侧金色卷草带，向两侧渐隐（样式见 css/ai.css） -->
+      <!-- 缠枝花叶披带：藤蔓 S 形主线（双层线描）+ 对生尖叶 + 葡萄小串，近端收于花苞、远端渐隐（样式见 css/ai.css） -->
       <div class="stage-sash stage-sash--left" aria-hidden="true">
-        <svg viewBox="0 0 90 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-          <path d="M2 12h58"/><path d="M8 12c6-7 14-7 20 0s14 7 20 0"/><circle cx="84" cy="12" r="2.4" fill="currentColor" stroke="none"/>
+        <svg viewBox="0 0 130 28" fill="none" stroke="currentColor" stroke-linecap="round">
+          <!-- 内衬细线：主线上方 2.5px 平行衬线，模拟镂通雕层次 -->
+          <path d="M2 14 C 16 6, 30 22, 46 14 S 76 6, 92 14 S 110 18, 121 13" transform="translate(0 -2.5)" stroke-width="0.8" opacity="0.55"/>
+          <!-- 藤蔓主线：S 形三段，远端(左)渐隐、近端(右)收于花苞 -->
+          <path d="M2 14 C 16 6, 30 22, 46 14 S 76 6, 92 14 S 110 18, 121 13" stroke-width="1.6"/>
+          <!-- 对生尖叶：沿藤蔓上下交替，双弧闭合叶形 -->
+          <g stroke-width="1.2">
+            <path d="M15 11.6 Q13.2 7.6 17.5 4.2 Q19.4 8.4 15 11.6 Z"/>
+            <path d="M33 15.8 Q36.2 18.6 31.5 22.8 Q28.6 19.2 33 15.8 Z"/>
+            <path d="M60 9 Q58.4 5.2 62 2.6 Q64.2 5.8 60 9 Z"/>
+            <path d="M91 13.8 Q94.6 15.8 92 21 Q89 17.4 91 13.8 Z"/>
+          </g>
+          <!-- 叶中脉细线 -->
+          <g stroke-width="0.7" opacity="0.7">
+            <path d="M15.3 10.5 Q15.7 7.6 17.2 4.9"/>
+            <path d="M32.7 16.9 Q32.1 19.5 31.8 21.9"/>
+            <path d="M60.3 8 Q60.8 5.6 61.7 3.6"/>
+            <path d="M91.2 14.8 Q91.4 17.6 91.8 20"/>
+          </g>
+          <!-- 果串短柄 -->
+          <g stroke-width="1">
+            <path d="M46 14.3 Q45.2 16.2 44.4 17.6"/>
+            <path d="M108 18.4 Q107.1 19.9 106.4 21.2"/>
+          </g>
+          <!-- 葡萄小串：藤蔓中段两处垂挂，三果错落、透明度分层 -->
+          <g stroke="none" fill="currentColor">
+            <circle cx="43" cy="19.4" r="1.8" opacity="0.9"/>
+            <circle cx="46.2" cy="19.8" r="2" opacity="0.65"/>
+            <circle cx="44.4" cy="22.6" r="1.6" opacity="0.8"/>
+            <circle cx="105" cy="22.6" r="1.8" opacity="0.9"/>
+            <circle cx="108.2" cy="23" r="2" opacity="0.65"/>
+            <circle cx="106.4" cy="25.2" r="1.5" opacity="0.8"/>
+          </g>
+          <!-- 近端花苞：小圆 + 两片苞叶收尾 -->
+          <circle cx="124.6" cy="10" r="2.2" stroke="none" fill="currentColor" opacity="0.95"/>
+          <g stroke-width="1">
+            <path d="M121 13 Q117.6 10.6 120.8 7.2 Q122.6 10.2 121 13 Z"/>
+            <path d="M121.6 13.4 Q126.4 13 127.6 8.6 Q122.8 9.6 121.6 13.4 Z"/>
+          </g>
         </svg>
       </div>
       <div class="stage-sash stage-sash--right" aria-hidden="true">
-        <svg viewBox="0 0 90 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" style="transform: scaleX(-1)">
-          <path d="M2 12h58"/><path d="M8 12c6-7 14-7 20 0s14 7 20 0"/><circle cx="84" cy="12" r="2.4" fill="currentColor" stroke="none"/>
+        <svg viewBox="0 0 130 28" fill="none" stroke="currentColor" stroke-linecap="round" style="transform: scaleX(-1)">
+          <!-- 内衬细线：主线上方 2.5px 平行衬线，模拟镂通雕层次 -->
+          <path d="M2 14 C 16 6, 30 22, 46 14 S 76 6, 92 14 S 110 18, 121 13" transform="translate(0 -2.5)" stroke-width="0.8" opacity="0.55"/>
+          <!-- 藤蔓主线：S 形三段，远端(左)渐隐、近端(右)收于花苞 -->
+          <path d="M2 14 C 16 6, 30 22, 46 14 S 76 6, 92 14 S 110 18, 121 13" stroke-width="1.6"/>
+          <!-- 对生尖叶：沿藤蔓上下交替，双弧闭合叶形 -->
+          <g stroke-width="1.2">
+            <path d="M15 11.6 Q13.2 7.6 17.5 4.2 Q19.4 8.4 15 11.6 Z"/>
+            <path d="M33 15.8 Q36.2 18.6 31.5 22.8 Q28.6 19.2 33 15.8 Z"/>
+            <path d="M60 9 Q58.4 5.2 62 2.6 Q64.2 5.8 60 9 Z"/>
+            <path d="M91 13.8 Q94.6 15.8 92 21 Q89 17.4 91 13.8 Z"/>
+          </g>
+          <!-- 叶中脉细线 -->
+          <g stroke-width="0.7" opacity="0.7">
+            <path d="M15.3 10.5 Q15.7 7.6 17.2 4.9"/>
+            <path d="M32.7 16.9 Q32.1 19.5 31.8 21.9"/>
+            <path d="M60.3 8 Q60.8 5.6 61.7 3.6"/>
+            <path d="M91.2 14.8 Q91.4 17.6 91.8 20"/>
+          </g>
+          <!-- 果串短柄 -->
+          <g stroke-width="1">
+            <path d="M46 14.3 Q45.2 16.2 44.4 17.6"/>
+            <path d="M108 18.4 Q107.1 19.9 106.4 21.2"/>
+          </g>
+          <!-- 葡萄小串：藤蔓中段两处垂挂，三果错落、透明度分层 -->
+          <g stroke="none" fill="currentColor">
+            <circle cx="43" cy="19.4" r="1.8" opacity="0.9"/>
+            <circle cx="46.2" cy="19.8" r="2" opacity="0.65"/>
+            <circle cx="44.4" cy="22.6" r="1.6" opacity="0.8"/>
+            <circle cx="105" cy="22.6" r="1.8" opacity="0.9"/>
+            <circle cx="108.2" cy="23" r="2" opacity="0.65"/>
+            <circle cx="106.4" cy="25.2" r="1.5" opacity="0.8"/>
+          </g>
+          <!-- 近端花苞：小圆 + 两片苞叶收尾 -->
+          <circle cx="124.6" cy="10" r="2.2" stroke="none" fill="currentColor" opacity="0.95"/>
+          <g stroke-width="1">
+            <path d="M121 13 Q117.6 10.6 120.8 7.2 Q122.6 10.2 121 13 Z"/>
+            <path d="M121.6 13.4 Q126.4 13 127.6 8.6 Q122.8 9.6 121.6 13.4 Z"/>
+          </g>
         </svg>
       </div>
       <div class="ai-avatar-wrap">
