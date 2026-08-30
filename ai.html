@@ -52,6 +52,9 @@
     <!-- Canvas粒子层（淡鎏金金屑飘浮，透明度降低） -->
     <canvas id="particleCanvas"></canvas>
 
+    <!-- 金色纱幕：压暗背景微粒、提升对话区文字可读性（样式见 css/ai.css） -->
+    <div class="gold-veil" aria-hidden="true"></div>
+
     <!-- 顶部标题栏 -->
     <header class="ai-header">
       <h1 class="ai-header__title">木雕小匠</h1>
@@ -414,14 +417,24 @@
    * 这一段在干什么：页面加载完成后，显示欢迎语、话题引导卡、检测API Key、启动粒子
    * ============================================================ */
 
-  // 话题列表（6个引导话题）
+  // 传统纹样线性图标（inline SVG，stroke 用 currentColor 便于 CSS 控色）
+  const TOPIC_ICONS = {
+    lattice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16M6.3 6.3l11.4 11.4M17.7 6.3L6.3 17.7"/></svg>', // 蟹篓镂空圆窗
+    gold: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.4 6.8 19.2l1-5.9L3.5 9.2l5.9-.8z"/></svg>', // 金箔星芒
+    seal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 15v-4M12 15V9M15 15v-3"/></svg>', // 篆刻印章
+    scroll: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7"/><path d="M7 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2M10 9h6M10 13h6"/></svg>', // 卷轴史册
+    knife: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20l6-2L20 8a2.2 2.2 0 0 0-3-3L7 15z"/><path d="M14 6l4 4"/></svg>', // 刻刀
+    compare: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/></svg>' // 双纹对比
+  };
+
+  // 话题列表（6个引导话题：icon 对应 TOPIC_ICONS 的 key，text 为纯文本）
   const TOPICS = [
-    '🦀 蟹篓镂空技法有多难？',
-    '✨ 金漆木雕为什么贴金箔？',
-    '👨‍🎨 最有名的传承人是谁？',
-    '📜 潮州木雕有多少年历史？',
-    '🔨 木雕需要哪些特殊工具？',
-    '🆚 和东阳木雕有什么区别？'
+    { icon: 'lattice', text: '蟹篓镂空技法有多难？' },
+    { icon: 'gold',     text: '金漆木雕为什么贴金箔？' },
+    { icon: 'seal',     text: '最有名的传承人是谁？' },
+    { icon: 'scroll',   text: '潮州木雕有多少年历史？' },
+    { icon: 'knife',    text: '木雕需要哪些特殊工具？' },
+    { icon: 'compare',  text: '和东阳木雕有什么区别？' }
   ];
 
   // 显示欢迎语+话题卡片
@@ -431,13 +444,15 @@
     // 添加话题卡片区
     const topicsDiv = document.createElement('div');
     topicsDiv.className = 'ai-topics';
-    TOPICS.forEach(topic => {
+    TOPICS.forEach(function(topic, i) {
       const card = document.createElement('div');
       card.className = 'ai-topic-card';
-      card.textContent = topic;
-      // 点击话题：首次使用先确认隐私提示，再提交给 AI。
+      card.innerHTML = '<span class="ai-topic-card__icon" aria-hidden="true">' + TOPIC_ICONS[topic.icon] + '</span><span class="ai-topic-card__text">' + topic.text + '</span>';
+      // 入场渐次浮现（stagger）：CSS 端负责动画，这里只给每张牌一个递增延迟
+      card.style.animationDelay = (120 + i * 90) + 'ms';
       card.addEventListener('click', function() {
-        requestAiPrivacyConsent(topic);
+        // 传纯文本（不再带 emoji），由 requestAiPrivacyConsent 提交给 AI
+        requestAiPrivacyConsent(topic.text);
       });
       topicsDiv.appendChild(card);
     });
@@ -470,26 +485,178 @@
 
 
   /* ============================================================
-   * 【H 区】Canvas淡鎏金粒子系统
-   * ------------------------------------------------------------
-   * 这一段在干什么：在背景层画18个淡金色粒子，缓慢向上飘浮，营造国风雅致感
-   * 人话讲：像空气里飘着细碎的金粉，很淡很柔，不抢文字风头
-   * 新手易错点：
-   *   1. Canvas必须设置width/height属性（不是CSS宽高），否则模糊
-   *   2. requestAnimationFrame递归调用才能持续动画
-   *   3. 粒子超出边界要重置，否则粒子飘完就没了
-   *   4. 粒子透明度调低到0.1-0.3，颜色用淡鎏金色
+   * 【H 区】金漆流光·生成艺术背景
+   * 三层：金箔微尘（漂浮闪烁）/ 镂空光斑（柔焦圆窗缓移）/ 木纹流线（极淡顺流）
+   * 性能：页面不可见暂停；prefers-reduced-motion 只画一帧静态
    * ============================================================ */
-  const particles = [];
-  const PARTICLE_COUNT = 18;  // 粒子数量减少到18个
+  const dustParticles = [];   // 第一层：金箔微尘
+  const glows = [];           // 第二层：镂空光斑（柔焦圆窗）
+  const grains = [];          // 第三层：木纹流线
   let ctx = null;
+  let rafId = 0;              // 当前 requestAnimationFrame 的句柄（用于暂停/重启）
+  let canvasW = 0;            // 画布 CSS 尺寸（逻辑像素，绘制均基于它）
+  let canvasH = 0;
+  // 减动效偏好：开启时只绘制一帧静态画面，不启动动画循环
+  const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // 金色取色：#C9A227 → #E8C66B 之间随机线性插值，返回 "r,g,b" 字符串
+  function randomGoldColor() {
+    const mix = Math.random();
+    const r = Math.round(201 + (232 - 201) * mix);
+    const g = Math.round(162 + (198 - 162) * mix);
+    const b = Math.round(39 + (107 - 39) * mix);
+    return r + ',' + g + ',' + b;
+  }
+
+  // 依据画布尺寸构建三层元素位置（resize 时重建，保证铺满不跑偏）
+  function buildElements() {
+    dustParticles.length = 0;
+    glows.length = 0;
+    grains.length = 0;
+
+    // 1) 金箔微尘：约 26 个，缓慢向上/斜向漂浮，呼吸闪烁
+    for (let i = 0; i < 26; i++) {
+      const isLarge = Math.random() < 0.15;                 // 约 15% 大粒子（金屑）
+      dustParticles.push({
+        x: Math.random() * canvasW,
+        y: Math.random() * canvasH,
+        vx: (Math.random() - 0.5) * 0.3,                    // 横向 ±0.15，极小
+        vy: 0.03 + Math.random() * 0.12,                    // 纵向缓慢上浮
+        size: isLarge ? (2 + Math.random() * 1.5) : (1 + Math.random() * 0.8), // 大粒子 2-3.5px，其余 1-1.8px
+        color: randomGoldColor(),                           // 金色系随机
+        baseAlpha: 0.06 + Math.random() * 0.16,             // 透明度基准 0.06-0.22
+        phase: Math.random() * Math.PI * 2,                 // 呼吸相位（每粒随机）
+        freq: 0.0008 + Math.random() * 0.002                // 呼吸频率（每粒随机，约 2-8 秒一个周期）
+      });
+    }
+
+    // 2) 镂空光斑：3 个大柔焦圆窗，绕各自基准点做慢速圆周漂移（周期 40-80 秒）
+    for (let i = 0; i < 3; i++) {
+      glows.push({
+        bx: canvasW * (0.2 + 0.3 * i) + (Math.random() - 0.5) * 60, // 基准点横向分散
+        by: canvasH * (0.15 + Math.random() * 0.55),                // 基准点纵向随机
+        r: 60 + Math.random() * 50,                                 // 半径 60-110px
+        drift: 15 + Math.random() * 25,                             // 圆周漂移半径
+        period: (40 + Math.random() * 40) * 1000,                   // 周期 40-80 秒（毫秒）
+        phase: Math.random() * Math.PI * 2                          // 初相位错开
+      });
+    }
+
+    // 3) 木纹流线：8 条极淡水平波浪线，缓慢横向顺流
+    for (let i = 0; i < 8; i++) {
+      grains.push({
+        y: canvasH * (0.06 + 0.88 * (i / 7)) + (Math.random() - 0.5) * 30, // 纵向近似均匀分布
+        amp: 3 + Math.random() * 5,                          // sin 微扰的 y 起伏幅度
+        wavelength: 0.004 + Math.random() * 0.004,           // 波形疏密系数
+        phase: Math.random() * Math.PI * 2,                  // 波形初相位
+        speed: 0.008 + Math.random() * 0.012                 // 横向流动速度（px/ms）
+      });
+    }
+  }
+
+  // 绘制第一层：金箔微尘（alpha 用 sin 波调制，产生呼吸闪烁）
+  function drawDust(t) {
+    for (let i = 0; i < dustParticles.length; i++) {
+      const p = dustParticles[i];
+      const alpha = p.baseAlpha * (0.55 + 0.45 * Math.sin(t * p.freq + p.phase));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + p.color + ',' + alpha.toFixed(3) + ')';
+      ctx.fill();
+    }
+  }
+
+  // 更新第一层：金箔微尘位置（出界后环绕重置，保证画面始终有尘）
+  function updateDust() {
+    for (let i = 0; i < dustParticles.length; i++) {
+      const p = dustParticles[i];
+      p.x += p.vx;
+      p.y -= p.vy;                       // 向上漂浮（vy 为上浮速度）
+      if (p.y < -12) {                   // 飘出顶部 → 回到底部随机位置
+        p.y = canvasH + 10;
+        p.x = Math.random() * canvasW;
+      }
+      if (p.x < -12) p.x = canvasW + 10; // 左右环绕
+      else if (p.x > canvasW + 12) p.x = -10;
+    }
+  }
+
+  // 绘制第二层：镂空光斑（径向渐变柔焦圆窗，中心金 rgba(201,162,39,0.10) → 边缘透明）
+  function drawGlows(t) {
+    for (let i = 0; i < glows.length; i++) {
+      const g = glows[i];
+      const theta = g.phase + (t / g.period) * Math.PI * 2; // 慢速圆周运动角度
+      const x = g.bx + Math.cos(theta) * g.drift;
+      const y = g.by + Math.sin(theta) * g.drift;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, g.r);
+      grad.addColorStop(0, 'rgba(201,162,39,0.10)');
+      grad.addColorStop(1, 'rgba(201,162,39,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, g.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 绘制第三层：木纹流线（极淡水平波浪线，offset 随时间增长产生顺流感）
+  function drawGrains(t) {
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(120,84,48,0.05)';
+    for (let i = 0; i < grains.length; i++) {
+      const s = grains[i];
+      const offset = t * s.speed;
+      ctx.beginPath();
+      for (let x = -20; x <= canvasW + 20; x += 24) {
+        const y = s.y + Math.sin((x + offset) * s.wavelength + s.phase) * s.amp;
+        if (x === -20) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // 绘制一帧完整画面（先木纹、再光斑、最后微尘，保证微尘在最上层）
+  function renderFrame(t) {
+    ctx.clearRect(0, 0, canvasW, canvasH);
+    drawGrains(t);
+    drawGlows(t);
+    drawDust(t);
+  }
+
+  // 动画主循环：更新 + 绘制 + 排下一帧
+  function frame(t) {
+    if (!ctx) return;
+    updateDust();
+    renderFrame(t);
+    rafId = requestAnimationFrame(frame);
+  }
+
+  // 启动/重启动画（reduced-motion 时只画一帧静态）
+  function startAnimation() {
+    cancelAnimationFrame(rafId);
+    if (REDUCED_MOTION) {
+      renderFrame(0); // 只绘制一帧静态画面，不再循环
+      return;
+    }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  // 页面不可见时暂停动画（省电省性能），恢复可见时重启
+  document.addEventListener('visibilitychange', function() {
+    if (REDUCED_MOTION) return; // 静态模式无需管理循环
+    if (document.hidden) {
+      cancelAnimationFrame(rafId);
+    } else {
+      rafId = requestAnimationFrame(frame);
+    }
+  });
 
   function initParticles() {
     if (!particleCanvas) return;
     ctx = particleCanvas.getContext('2d');
     if (!ctx) return;
 
-    // 设置Canvas实际像素尺寸（适配高DPI屏幕）
+    // 设置Canvas实际像素尺寸（适配高DPI屏幕）；尺寸变化后按新 rect 重建三层元素位置
     function resizeCanvas() {
       const rect = particleCanvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
@@ -497,75 +664,16 @@
       particleCanvas.height = rect.height * dpr;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
+      canvasW = rect.width;
+      canvasH = rect.height;
+      buildElements();
+      if (REDUCED_MOTION) renderFrame(0); // 静态模式下 resize 后重画一次
     }
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // 初始化粒子
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      particles.push(createParticle(true));
-    }
-
-    // 启动动画循环
-    animateParticles();
-  }
-
-  // 创建一个粒子（initial=true表示初始随机位置，false从底部重置）
-  function createParticle(initial) {
-    const rect = particleCanvas.getBoundingClientRect();
-    const isLarge = Math.random() < 0.15; // 15%概率是大粒子（金屑）
-    return {
-      x: Math.random() * rect.width,
-      y: initial ? Math.random() * rect.height : rect.height + Math.random() * 80,
-      vx: (Math.random() - 0.5) * 0.2,
-      vy: 0.1 + Math.random() * 0.3,
-      size: isLarge ? (2 + Math.random() * 2) : (1 + Math.random() * 1.5),
-      alpha: isLarge ? (0.1 + Math.random() * 0.2) : (0.08 + Math.random() * 0.15),  // 透明度降到0.1-0.3
-      life: 0.4 + Math.random() * 0.6,
-      isLarge: isLarge
-    };
-  }
-
-  // 粒子动画主循环
-  function animateParticles() {
-    if (!ctx) return;
-    const rect = particleCanvas.getBoundingClientRect();
-
-    // 清空画布
-    ctx.clearRect(0, 0, rect.width, rect.height);
-
-    // 更新并绘制每个粒子
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-
-      // 更新位置
-      p.x += p.vx;
-      p.y -= p.vy;
-      p.life -= 0.0015;
-      p.alpha = Math.max(0, p.life * (p.isLarge ? 0.25 : 0.2));
-
-      // 超出顶部或生命周期结束，重置到底部
-      if (p.y < -10 || p.life <= 0) {
-        particles[i] = createParticle(false);
-        continue;
-      }
-
-      // 绘制粒子：淡鎏金色(rgba(212,175,55,alpha))
-      if (p.isLarge && p.size > 2.5) {
-        // 大粒子加柔光
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(212,175,55,${p.alpha * 0.3})`;
-        ctx.fill();
-      }
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(212,175,55,${p.alpha})`;
-      ctx.fill();
-    }
-
-    // 下一帧继续
-    requestAnimationFrame(animateParticles);
+    // 启动动画（或静态帧）
+    startAnimation();
   }
 
   // 启动粒子系统
@@ -982,6 +1090,14 @@
         aigcTag.className = 'aigc-tag';
         aigcTag.textContent = 'AIGC';
         bubble.appendChild(aigcTag);
+        // 「小匠」落款印章（仿古钤印装饰）
+        // 说明：thinking→最终回复的替换机制是整泡替换（hideThinking 新建 AI 气泡、
+        // 移除思考气泡），不原地改写气泡文本，因此这里直接在气泡末尾追加印章
+        // 不会影响该机制；思考气泡（type==='thinking'）不加印章，走上面分支。
+        const seal = document.createElement('span');
+        seal.className = 'chat__seal';
+        seal.textContent = '小匠';
+        bubble.appendChild(seal);
       } else {
         // 用户气泡：直接放文字
         bubble.textContent = text;
