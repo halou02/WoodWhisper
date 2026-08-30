@@ -371,29 +371,40 @@
   let isAiBusy = false;
 
 
-  /* 输入态停靠：键盘弹出时输入栏贴键盘上沿，隐藏底部导航，聊天滚到最新 */
+  /* 输入态：容器高度跟随可视视口，输入栏贴键盘上沿；键盘收起自动退出 */
   (function () {
-    if (!window.visualViewport) return; // 老浏览器无此 API，静默降级为原生行为
+    if (!window.visualViewport) return; // 老浏览器无此 API，静默降级
     const vv = window.visualViewport;
-    const keyboardSpace = function () {
-      // 键盘高度 = 布局视口高度 - 可视视口底边（offsetTop 修正 iOS 平移）
-      return Math.max(0, document.documentElement.clientHeight - vv.height - vv.offsetTop);
+    // 冻结基准高度（ai.html 顶部的 --app-height）
+    const frozenHeight = function () {
+      const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-height'));
+      return isNaN(v) ? window.innerHeight : v;
     };
-    const syncKeyboard = function () {
-      aiPage.style.setProperty('--kb-height', keyboardSpace() + 'px');
+    const syncTyping = function () {
+      if (!aiPage.classList.contains('is-typing')) return;
+      // 键盘已收起（可视高度恢复到接近冻结值）→ 自动退出输入态
+      if (vv.height >= frozenHeight() - 2) {
+        exitTyping();
+        return;
+      }
+      aiPage.style.setProperty('--vv-height', vv.height + 'px');
     };
-    vv.addEventListener('resize', syncKeyboard);
-    vv.addEventListener('scroll', syncKeyboard);
+    const exitTyping = function () {
+      aiPage.classList.remove('is-typing');
+      aiPage.style.removeProperty('--vv-height');
+      chatBox.scrollTop = chatBox.scrollHeight; // 滚到最新消息，避免气泡被输入栏遮挡
+    };
+    vv.addEventListener('resize', syncTyping);
+    vv.addEventListener('scroll', syncTyping);
     chatInput.addEventListener('focus', function () {
-      aiPage.classList.add('is-typing');
-      syncKeyboard();
-      // 聊天区滚到最新消息
+      // 仅触屏设备进入输入态；桌面端无软键盘，保持原布局
+      if (window.matchMedia('(pointer: coarse)').matches) {
+        aiPage.classList.add('is-typing');
+        aiPage.style.setProperty('--vv-height', vv.height + 'px');
+      }
       chatBox.scrollTop = chatBox.scrollHeight;
     });
-    chatInput.addEventListener('blur', function () {
-      aiPage.classList.remove('is-typing');
-      aiPage.style.setProperty('--kb-height', '0px');
-    });
+    chatInput.addEventListener('blur', exitTyping);
   })();
 
 
@@ -1121,7 +1132,6 @@
       chatInput.disabled = false;
       imageBtn.disabled = false;
       updateBtnMode();
-      chatInput.focus();
     }
   }
 

@@ -344,8 +344,6 @@
       border-radius: 16px;
       flex-shrink: 0;
       box-shadow: var(--shadow-card);
-      transition: transform 0.25s ease;
-      will-change: transform;
     }
     .ai-input-bar__icon-btn {
       width: 42px;
@@ -390,9 +388,11 @@
       background: #FFFBF0;
     }
 
-    /* ========== 输入态：键盘弹出时输入栏停靠键盘上沿，隐藏底部导航 ========== */
-    .page--ai.is-typing .ai-input-bar {
-      transform: translateY(calc(-1 * var(--kb-height, 0px)));
+    /* ========== 输入态：容器高度跟随可视视口，输入栏贴键盘上沿，隐藏底部导航 ========== */
+    .page--ai.is-typing {
+      height: var(--vv-height, var(--app-height, 100dvh));
+      padding-bottom: 8px; /* 导航已隐藏，收紧底部留白消除输入栏下方空白 */
+      min-height: 0; /* 覆盖 .page 继承的 min-height:100vh，否则容器无法收缩 */
     }
     .page--ai.is-typing .bottom-nav {
       display: none;
