@@ -307,7 +307,10 @@
     .inherit-card--featured {
       transform: scale(1.03) translateY(2px) !important;
       z-index: 3;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 15px rgba(200,164,102,0.2), inset 0 0 0 1px rgba(200,164,102,0.3) !important;
+      /* 易错点：此处 box-shadow 不能加 !important——CSS 级联中 !important 声明
+       * 优先级高于动画（animation），加了会让下方"金边呼吸光环"的 keyframes 永远不生效。
+       * 本规则定义在 .inherit-card 之后，同特异性下后来者胜，无需 !important 也能覆盖。 */
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 15px rgba(200,164,102,0.2), inset 0 0 0 1px rgba(200,164,102,0.3);
       filter: brightness(1) !important;
       border-color: #d4b072;
     }
@@ -878,6 +881,73 @@
       line-height: 1.7;
       color: var(--inherit-text);
       text-indent: 2em;
+    }
+
+    /* ===== 10.1 传承脉络区（弹窗内）=====
+     * 在干什么：story 下方展示该匠人的师承关系 chips（如「其子·陈培臣」），
+     *   数据来自 js/inherit-data.js 的 LINEAGE 表；无数据时容器 hidden，不留空洞。
+     * 质感约定：金色小标题 + 细金边胶囊 chip，与页面金色系纹样语言一致。
+     */
+    .inherit-modal__lineage {
+      margin-top: 16px;
+      padding-top: 12px;
+      /* 顶部细分隔线：半透明金色，轻柔地与 story 区隔开 */
+      border-top: 1px solid rgba(200,164,102,0.25);
+    }
+
+    .inherit-modal__lineage-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 0 10px;
+      font-family: serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--inherit-text); /* 金色小标题，SVG 用 currentColor 自动跟随 */
+    }
+
+    .inherit-modal__lineage-title svg {
+      flex: 0 0 auto;
+    }
+
+    .inherit-modal__lineage-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* 关系 chip：胶囊造型。原生是 <button>，必须重置默认样式（灰底/边框/字体），
+     * 否则在日间模式下会出现突兀的系统按钮底色。 */
+    .inherit-lineage-chip {
+      -webkit-appearance: none;
+      appearance: none;
+      margin: 0;
+      padding: 5px 12px;
+      font-family: serif;
+      font-size: 12.5px;
+      line-height: 1.4;
+      color: var(--inherit-text);
+      background: rgba(200,164,102,0.12); /* 金色薄纱叠底：夜间呈暗金、日间呈米金 */
+      border: 1px solid rgba(200,164,102,0.55); /* 细金边 */
+      border-radius: 999px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+      /* 错峰淡入：animation-delay 由 JS 按序号内联（index*60ms）。
+       * fill-mode 用 backwards——延迟期间先隐藏（应用 from 态），结束后不锁定关键帧值，
+       * 这样 :active 的按压缩放（transform）不会被动画的 fill 状态顶掉。 */
+      animation: inheritChipIn 0.35s ease backwards;
+    }
+
+    .inherit-lineage-chip:hover {
+      background: rgba(200,164,102,0.24);
+      border-color: #d4b072;
+    }
+
+    .inherit-lineage-chip:active {
+      transform: scale(0.94); /* 按压反馈 */
+      background: rgba(200,164,102,0.3);
     }
 
     /* ===== 11. 冷门小故事气泡（长按彩蛋） =====
@@ -1820,5 +1890,70 @@
       .jiangyu-blessing__text {
         font-size: 15px;
         line-height: 1.8;
+      }
+    }
+
+    /* ===== 15. 回路轻动效 =====
+     * 在干什么：给"匠人回路"补三处克制动效——featured 卡金边呼吸光环、
+     *   弹窗内容淡入上浮、师承 chips 错峰淡入。全部在下方 prefers-reduced-motion 中关闭。
+     *
+     * 新手易错点：
+     *   - featured 卡已有放大 transform（scale 1.03），呼吸光环的 keyframes 只动 box-shadow，
+     *     千万别在 keyframes 里写 transform，否则会覆盖既有放大/过渡效果。
+     *   - 动画的优先级低于 !important 声明：featured 的 box-shadow 声明已去掉 !important
+     *     （见 5.2 节注释），否则呼吸动画不生效。
+     */
+    .inherit-card--featured {
+      animation: inheritFeaturedBreath 3s ease-in-out infinite;
+    }
+
+    /* 呼吸节奏：0%/100% 为静态光环（与声明值一致，切换无跳变），
+     * 50% 光晕扩散半径与透明度增大——只改 box-shadow，不碰 transform/filter。 */
+    @keyframes inheritFeaturedBreath {
+      0%, 100% {
+        box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 15px rgba(200,164,102,0.2), inset 0 0 0 1px rgba(200,164,102,0.3);
+      }
+      50% {
+        box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 30px rgba(212,176,114,0.55), inset 0 0 0 1px rgba(212,176,114,0.6);
+      }
+    }
+
+    /* 弹窗内容淡入上浮：打开弹窗与 chip 穿梭切换时，由 JS 给 panel 加
+     * .inherit-modal__panel--enter 类并配合"移除→强制 reflow→再加回"重启动画。
+     * 0%/100% 之外的中间帧由浏览器插值；fill-mode 用 both 保证 delay 前后状态稳定。 */
+    .inherit-modal__panel--enter {
+      animation: inheritPanelSwap 0.35s ease-out both;
+    }
+
+    @keyframes inheritPanelSwap {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* chips 错峰淡入：animation-delay 由 JS 内联（每枚顺延 60ms）。
+     * fill-mode 用 backwards：延迟期间先应用 from 态（透明），实现"依次浮现"；
+     * 动画结束后不锁定关键帧值，:active 按压缩放才能正常生效。 */
+    @keyframes inheritChipIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== 16. prefers-reduced-motion 兜底 =====
+     * 在干什么：系统开启"减弱动态效果"时，关闭本页新增的全部动效
+     *   （呼吸光环 / 弹窗淡入 / chips 错峰淡入），只保留静态样式与交互功能，
+     *   布局、内容、可点击性完全不受影响。
+     * 易错点：transform 类过渡（chip 按压缩放）也属于运动反馈，一并关闭更彻底；
+     *   颜色类过渡（hover 变色）不属于运动，保留不影响无障碍。 */
+    @media (prefers-reduced-motion: reduce) {
+      .inherit-card--featured,
+      .inherit-modal__panel--enter,
+      .inherit-lineage-chip {
+        animation: none !important;
+      }
+      .inherit-lineage-chip {
+        transition: background 0.2s ease, border-color 0.2s ease; /* 去掉 transform 过渡 */
+      }
+      .inherit-lineage-chip:active {
+        transform: none;
       }
     }
