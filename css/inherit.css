@@ -242,6 +242,16 @@
       touch-action: pan-x;
     }
 
+    /* 无限漂移激活期间禁用强制吸附
+     * 在干什么：JS 启动匀速漂移时会加上 is-drifting 类，此时关掉 scroll-snap。
+     *   避免强制吸附与匀速漂移互相"拽"（snap 想把卡片拉回锚点，漂移想匀速前进）。
+     * 暂停或用户接管时，JS 移除该类，恢复 mandatory 吸附，保证手动滑动手感不变。
+     * 验证：漂移中卡片应匀速滑过而不回弹吸附；手一碰（暂停）又能正常吸附居中。
+     */
+    .inherit-cards-scroll.is-drifting {
+      scroll-snap-type: none;
+    }
+
     /* 手势方向判定为纵向时，临时禁止横向滚动，避免竖滑页面时卡片误动 */
     .inherit-cards-scroll--lock-x {
       overflow-x: hidden !important;
