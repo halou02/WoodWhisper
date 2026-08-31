@@ -126,6 +126,104 @@
       height: 22px;
     }
 
+    /* ===== 1.5 头部时光年轮装饰（半幅年轮 + 缠枝披带 + 时光刻度点，三层构图） ===== */
+
+    /* 装饰容器：绝对定位于 header 左侧空白区并整体裁切。
+       人话讲：header 是 sticky 已具备定位上下文，容器 left:0 顶到 header 最左缘；
+       overflow:hidden 负责裁掉超出 header 上下边界的弧线，绝不压到下方主内容；
+       z-index:0 低于标题文字（标题/按钮在 z-index:2 层），pointer-events:none 让点击穿透。 */
+    .history-header__ornament {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 150px;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+      /* 淡金基色：年轮弧线经 currentColor 继承此色 */
+      color: rgba(201, 162, 39, 0.6);
+      transition: color 0.4s ease;
+    }
+
+    /* 标题与月亮按钮浮在装饰之上（z-index 分层，文字永远可读可点） */
+    .history-header__titles,
+    .history-header__actions {
+      position: relative;
+      z-index: 2;
+    }
+
+    /* 层1 年轮画布：宽 120px，左移 48px（画布的 40%）让圆心 (60,100) 落到屏幕左缘外，右侧 60% 探入可视区 */
+    .ornament-ring {
+      position: absolute;
+      left: -48px;
+      top: 50%;
+      width: 120px;
+      height: 120px;
+      transform: translateY(-50%);
+    }
+
+    /* 弧线组整体 60s linear 极缓旋转；刻度点在组外，不跟转。
+       新手易错点：SVG 子元素的 transform-origin 默认按自身包围盒计算，
+       必须配 transform-box: view-box 才能精确钉在年轮圆心 (60,100)，否则旋转会画偏。 */
+    .ornament-ring__arcs {
+      transform-box: view-box;
+      transform-origin: 60px 100px;
+      animation: ornamentRingSpin 60s linear infinite;
+    }
+
+    @keyframes ornamentRingSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 层3 时光刻度点：加载后错峰点亮（0/300/600/900ms，呼应 清→民国→近现代→当代）。
+       fill-mode both 让延迟期间保持 0% 帧的全透明，点亮后停在峰值不闪回。 */
+    .ornament-dot {
+      fill: #C9A227;
+      opacity: 0.9;
+      transition: fill 0.4s ease;
+      animation: ornamentDotLight 1.2s ease-out both;
+    }
+
+    .ornament-dot--1 { animation-delay: 0ms; }
+    .ornament-dot--2 { animation-delay: 300ms; }
+    .ornament-dot--3 { animation-delay: 600ms; }
+    .ornament-dot--4 { animation-delay: 900ms; }
+
+    @keyframes ornamentDotLight {
+      0%   { opacity: 0; }
+      60%  { opacity: 1; }
+      100% { opacity: 0.9; }
+    }
+
+    /* 层2 缠枝花叶披带：贴年轮外沿、水平指向标题；
+       左缘 mask 渐隐融入年轮（与 ai 页舞台披带同款渐隐手法，金色亦保持一致） */
+    .ornament-sash {
+      position: absolute;
+      left: 42px;
+      top: 50%;
+      width: 96px;
+      height: auto;
+      transform: translateY(-50%);
+      color: rgba(201, 162, 39, 0.65);
+      transition: color 0.4s ease;
+      -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
+      mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
+    }
+
+    /* 展厅暗色模式：金色统一提为 #D4AF37 系并微降透明度，暗底上可读不刺眼 */
+    .history-page.dark .history-header__ornament {
+      color: rgba(212, 175, 55, 0.55);
+    }
+
+    .history-page.dark .ornament-sash {
+      color: rgba(212, 175, 55, 0.55);
+    }
+
+    .history-page.dark .ornament-dot {
+      fill: #D4AF37;
+    }
+
     /* ===== 2. 主内容区 ===== */
     .history-main {
       position: relative;
@@ -591,12 +689,28 @@
     /* 已在 style.css 中定义，无需重复 */
 
     /* ===== 响应式微调 ===== */
+
+    /* 窄屏（覆盖 390px 等主流手机）：装饰整体等比缩小到 0.72、以左缘为缩放基准，
+       披带右端收在标题起点之前；配合容器 overflow 裁切保证无横向溢出 */
+    @media (max-width: 430px) {
+      .history-header__ornament {
+        transform: scale(0.72);
+        transform-origin: left center;
+      }
+    }
+
     @media (max-width: 360px) {
       .history-header__title { font-size: 22px; }
       .dynasty-card__name { font-size: 24px; }
       .dynasty-card__text { font-size: 13.5px; }
       .gallery__grid { gap: 8px; }
       .gallery__item { border-radius: 10px; }
+    }
+
+    /* ===== 减少动效偏好：关闭年轮旋转与刻度点错峰点亮（静态保留装饰外观，刻度点保持常亮 0.9） ===== */
+    @media (prefers-reduced-motion: reduce) {
+      .ornament-ring__arcs { animation: none; }
+      .ornament-dot { animation: none; opacity: 0.9; }
     }
 
     @media (min-width: 420px) {
