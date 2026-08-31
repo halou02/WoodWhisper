@@ -199,6 +199,8 @@
           updateFeaturedCard();
           setTimeout(function() {
             cardsScroll.classList.remove('inherit-cards-scroll--init');
+            // 初始化完成（默认卡片定位 + init 类移除）：从这里调度开场缓动（约 800ms 后启动，见【开场动效】模块）
+            scheduleIntroDrift();
           }, 50);
         }
       }, 300);
@@ -335,6 +337,193 @@
         featuredTicking = true;
       }
     });
+
+    // ===== 【开场动效】开场缓动后停（intro drift）=====
+    // 在干什么：页面初始化完成（默认卡片陈培臣居中、init 类移除）约 800ms 后，卡片以
+    //   rAF 缓动（easeInOut）逐张滑向下一个吸附位，每张约 3s，连续自动前进 3 张
+    //   （data-index 4→5→6→7）后停止；本次页面生命周期内不再自动滚动。
+    //   一旦用户在卡片容器上 touchstart / wheel / mousedown / keydown，或打开任意弹窗
+    //   （匠人详情 openMasterModal / 年轮 openRingModal / 匠语漫行 openJiangyuModal），
+    //   立即取消当前动画。
+    // 数据从哪来：cardsScroll 当前 scrollLeft + 卡片布局坐标（offsetLeft/offsetWidth），
+    //   目标位复用初始化默认定位同一套"居中公式"：目标卡 offsetLeft - (容器宽 - 卡宽)/2，
+    //   与 scroll-snap 吸附点天然一致，缓动结束时正好落在精确吸附位。
+    // 新手易错点：
+    //   - rAF 句柄（introDriftRafId）必须每帧更新、结束/取消时清零：若旧句柄不清，
+    //     cancelAnimationFrame 取消不到正在排队的那一帧，会叠加出多套动画同时改
+    //     scrollLeft，滚动抖动且取消不干净。
+    //   - 交互取消监听全部用 passive:true：这里只"叫停自己的动画"，不阻止任何默认行为，
+    //     不需要 preventDefault；passive 监听不阻塞浏览器原生滚动，对滚动性能零损耗。
+    //   - 与 normalizeLoopScroll 的兼容：起点在中间份（份1）的 index=4 卡附近，向右仅走
+    //     3 张卡位，远够不着右缓冲区阈值（单份宽 × 2.5），缓动途中无感重置不会中途触发；
+    //     但取消/结束时仍要保证状态干净——rAF 清零、四类监听摘除，不残留半截动画状态。
+    //   - prefers-reduced-motion: reduce 用户明确要求减少动效：完全跳过，一帧都不跑；
+    //     document.hidden（后台标签页）不立即启动：rAF 在后台标签页会被暂停，若照常调度，
+    //     动画会瞬移堆积；改为挂一次性 visibilitychange 兜底监听，等页面切回可见后
+    //     再走正常 800ms 调度，切回来仍能看到开场缓动。
+    //   验证：打开传承页静置约 1 秒，卡片应自动缓慢右滑 3 张（每张约 3s）后停在吸附位，
+    //         featured 放大跟随；滑动期间手指一碰（或滚轮/按下/键盘）即停且不再自动播；
+    //         打开任意弹窗亦立即取消；刷新页面会重播一次（每次页面加载各一次）。
+    var introDriftDone = false;    // 开场缓动是否已播完/被取消（true = 本生命周期永不再启动）
+    var introDriftRafId = 0;       // 当前缓动 rAF 句柄（0 = 无动画在跑；必须清理防叠加）
+    var introDriftTimerId = 0;     // 启动调度的 setTimeout 句柄（防 800ms 等待期内重复调度）
+    var introDriftStartIndex = 4;  // 起点卡 data-index（默认陈培臣），启动时按 defaultCenter 重查
+    var introDriftVisibilityHooked = false; // visibilitychange 兜底监听是否已挂（防重入标志）
+
+    // 取消监听的公共回调：只取消动画，不阻止默认行为（配合 passive 使用）
+    function onIntroDriftCancel() {
+      cancelIntroDrift();
+    }
+
+    // 摘掉卡片容器上的四类取消监听（动画结束或取消后调用，保持状态干净）
+    function removeIntroDriftGuards() {
+      cardsScroll.removeEventListener('touchstart', onIntroDriftCancel);
+      cardsScroll.removeEventListener('wheel', onIntroDriftCancel);
+      cardsScroll.removeEventListener('mousedown', onIntroDriftCancel);
+      cardsScroll.removeEventListener('keydown', onIntroDriftCancel);
+    }
+
+    // 挂 visibilitychange 兜底监听（防重入：已挂或已播过/已取消则不重复挂）
+    function hookIntroDriftVisibility() {
+      if (introDriftVisibilityHooked || introDriftDone) return;
+      introDriftVisibilityHooked = true;
+      // { once: true }：只触发一次自动摘除，无需手动解绑；取消路径由 cancelIntroDrift 统一摘
+      document.addEventListener('visibilitychange', onIntroDriftVisibility, { once: true });
+    }
+
+    // 摘掉 visibilitychange 兜底监听（取消时调用，保证取消收得干净）
+    function removeIntroDriftVisibilityHook() {
+      if (!introDriftVisibilityHooked) return;
+      introDriftVisibilityHooked = false;
+      document.removeEventListener('visibilitychange', onIntroDriftVisibility);
+    }
+
+    // visibilitychange 兜底回调：后台标签页切回可见后，重新走一遍正常调度
+    function onIntroDriftVisibility() {
+      introDriftVisibilityHooked = false; // once 监听已消费，标志同步复位
+      // 等待期间被取消（弹窗/交互）→ 不再启动；未到 visible（理论少见）→ 不处理
+      if (introDriftDone || document.visibilityState !== 'visible') return;
+      scheduleIntroDrift(); // 此刻必为可见，hidden 校验会通过，走原有 800ms 调度
+    }
+
+    // 立即取消：停当前 rAF、清调度定时器、标记已播过（永不再启动）、摘监听
+    // 人话讲：取消入口统一收口——四类交互监听与三个弹窗打开函数都走这里。
+    function cancelIntroDrift() {
+      if (introDriftTimerId) {
+        // 800ms 调度等待期内取消：必须连 setTimeout 一起清，
+        // 否则到点后 startIntroDrift 照样启动，"取消"就落空了
+        clearTimeout(introDriftTimerId);
+        introDriftTimerId = 0;
+      }
+      if (introDriftRafId) {
+        cancelAnimationFrame(introDriftRafId); // 只认最新句柄，见"句柄必须清理防叠加"
+        introDriftRafId = 0;
+      }
+      // 连 visibilitychange 兜底监听一起摘掉：等待可见期间取消，切回后也不得再启动
+      removeIntroDriftVisibilityHook();
+      introDriftDone = true;
+      removeIntroDriftGuards();
+    }
+
+    // 调度开场缓动：renderCards 初始化收尾（init 类移除后）调用
+    // 在干什么：reduced-motion 直接跳过；后台标签页挂 visibilitychange 兜底等可见再调度；
+    //   都通过才 800ms 后启动
+    function scheduleIntroDrift() {
+      // 已播过/已取消 → 本次生命周期内不再启动；已排了定时器 → 防重复调度
+      if (introDriftDone || introDriftTimerId) return;
+      // reduced-motion：完全跳过（顺手标记完成，后续调用也一并拦住）
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        introDriftDone = true;
+        return;
+      }
+      // 后台标签页不立即启动（rAF 会被暂停、切回时动画瞬移堆积）：
+      // 不置 done，挂一次性 visibilitychange 兜底，等切回可见后再走下面的 800ms 调度
+      if (document.hidden) {
+        hookIntroDriftVisibility();
+        return;
+      }
+      // 初始化定位刚完成、init 类刚移除，再等约 800ms 让首屏先稳定一拍才启动
+      introDriftTimerId = setTimeout(function() {
+        introDriftTimerId = 0;
+        startIntroDrift();
+      }, 800);
+    }
+
+    // 启动：挂四类取消监听 → 记录起点 index → 从第 1 步开始步进
+    function startIntroDrift() {
+      // 调度等待期内用户可能已打开弹窗（cancelIntroDrift 置位）→ 不再启动
+      if (introDriftDone) return;
+      // 800ms 里用户可能切走了标签页：启动前再校验一次可见性，
+      // 仍不可见则不置 done，挂回 visibilitychange 兜底，等切回可见后重新调度
+      if (document.hidden) {
+        hookIntroDriftVisibility();
+        return;
+      }
+      // 挂取消监听（passive:true，见模块头部"新手易错点"说明）
+      cardsScroll.addEventListener('touchstart', onIntroDriftCancel, { passive: true });
+      cardsScroll.addEventListener('wheel', onIntroDriftCancel, { passive: true });
+      cardsScroll.addEventListener('mousedown', onIntroDriftCancel, { passive: true });
+      cardsScroll.addEventListener('keydown', onIntroDriftCancel, { passive: true });
+      // 起点卡与初始化默认定位同源：MASTERS 里 defaultCenter 标记的匠人（陈培臣，index=4）
+      var idx = MASTERS.findIndex(function(m) { return m.defaultCenter; });
+      introDriftStartIndex = (idx === -1) ? 4 : idx;
+      // remaining = 还要自动前进几张（3 → 目标 5，2 → 目标 6，1 → 目标 7）
+      advanceIntroDrift(3);
+    }
+
+    // 计算下一张目标卡并启动该步缓动
+    // 目标卡用 data-index="N" 取三份克隆中的中间份（NodeList[1]）：
+    //   克隆渲染顺序为 [份0][份1][份2]，同名卡共 3 张，NodeList 索引 1 即中间份
+    //   （与初始化默认定位的取法一致）；从中间份向右 3 张不会越界，无感重置不会中途触发。
+    function advanceIntroDrift(remaining) {
+      // 目标 data-index：以起点 4 起算，依次 5 → 6 → 7
+      var n = introDriftStartIndex + (4 - remaining);
+      var targets = cardsScroll.querySelectorAll('.inherit-card[data-index="' + n + '"]');
+      var card = targets[1]; // 中间份（共 COPY_COUNT=3 份，NodeList 索引 1）
+      if (!card) {
+        // 渲染异常兜底：找不到目标卡直接收尾，绝不留半截动画
+        introDriftDone = true;
+        removeIntroDriftGuards();
+        return;
+      }
+      var from = cardsScroll.scrollLeft;
+      // 复用初始化默认定位同一套居中公式，落点即 scroll-snap 吸附位
+      var to = card.offsetLeft - (cardsScroll.clientWidth - card.offsetWidth) / 2;
+      introDriftStep(from, to, 3000, remaining);
+    }
+
+    // 单步缓动：duration 毫秒内把 scrollLeft 从 from 缓动推进到 to（easeInOut）
+    // 每帧直接赋 scrollLeft：mandatory scroll-snap 只在滚动停止时吸附，
+    //   rAF 连续赋值本身就是平滑滚动，不会被中途拉走；to 是精确吸附位，结束即对齐。
+    function introDriftStep(from, to, duration, remaining) {
+      var startTime = 0; // 首帧时间戳（用 rAF 回调参数作时钟，避免另取 Date.now 的抖动）
+      function frame(now) {
+        if (!startTime) startTime = now;
+        // t ∈ [0,1]：本步已进行的比例
+        var t = Math.min((now - startTime) / duration, 1);
+        // easeInOut：起步缓、中间快、收尾缓（三次方曲线，观感自然不生硬）
+        var eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        cardsScroll.scrollLeft = from + (to - from) * eased;
+        if (t < 1) {
+          // 句柄每帧必须更新：取消时 cancelAnimationFrame 只认最新句柄（防叠加，见模块头）
+          introDriftRafId = requestAnimationFrame(frame);
+        } else {
+          // 本步结束：补一次精确落点，确保停在吸附位（浮点缓动末值可能有亚像素误差）
+          cardsScroll.scrollLeft = to;
+          introDriftRafId = 0;
+          if (remaining > 1) {
+            // 直接衔接下一步（无间隔，观感是连续滑过 3 张）
+            advanceIntroDrift(remaining - 1);
+          } else {
+            // 3 张全部走完：收尾，摘监听、标记完成，本生命周期不再自动滚动
+            introDriftDone = true;
+            removeIntroDriftGuards();
+          }
+        }
+      }
+      introDriftRafId = requestAnimationFrame(frame);
+    }
+
 
     // ===== 【交互层】卡片点击 → 弹出详情弹窗 =====
     // 人话讲：用事件委托，在滚动容器上统一监听点击，
@@ -535,6 +724,8 @@
     // ===== 【弹窗层】打开 / 关闭匠人详情弹窗 =====
     // 在干什么：把匠人数据填进 modal 各元素，加 .inherit-modal--open 显示。
     function openMasterModal(m) {
+      // 开场缓动进行中则立即取消：打开弹窗即视为用户主动操作（见【开场动效】模块）
+      cancelIntroDrift();
       // 头像：没有公开肖像时直接使用首字占位，有照片时才创建图片请求。
       modalAvatarWrap.innerHTML = '';
       if (m.portrait === false) {
@@ -772,6 +963,8 @@
 
     // 打开弹窗：滑入面板，重置状态，锁定背景滚动
     function openRingModal() {
+      // 开场缓动进行中则立即取消：打开弹窗即视为用户主动操作（见【开场动效】模块）
+      cancelIntroDrift();
       if (isRingModalOpen) return;
       isRingModalOpen = true;
       lastRingTrigger = document.activeElement;
@@ -1592,6 +1785,8 @@
     // 打开匠语漫行模态
     // 人话讲：显示模态，禁止页面滚动，开始飘字
     function openJiangyuModal() {
+      // 开场缓动进行中则立即取消：打开弹窗即视为用户主动操作（见【开场动效】模块）
+      cancelIntroDrift();
       lastJiangyuTrigger = document.activeElement;
       jiangyuModal.classList.add('visible');
       jiangyuModal.setAttribute('aria-hidden', 'false');
