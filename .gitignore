@@ -55,3 +55,8 @@ references/
 
 server/.env
 server/.env.*
+
+# 开发期第三方下载物（TTS 模型 / Python venv 等），体积大且不随仓库提交
+third_party/
+.venv-tts/
+.venv/

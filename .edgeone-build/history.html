@@ -15,6 +15,10 @@
   <title>历史脉络 · 潮州木雕</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/history.css">
+  <!-- 朗读不可用时的按钮弱化态（朗读中仅换 aria-label/文案，无发光动画、无文字高亮） -->
+  <style>
+    #speakBtn.tts-unavailable { opacity: 0.85; filter: grayscale(0.35); }
+  </style>
 </head>
 <body>
   <div class="history-page" id="historyPage">
@@ -216,6 +220,8 @@
   <!-- 引入全站公共工具函数（escapeHtml等），必须在内联脚本之前加载 -->
   <script src="js/common.js"></script>
   <script src="js/history-data.js"></script>
+  <!-- 全站统一朗读运行时（WoodWhisperTTS），必须在页面脚本之前引入 -->
+  <script src="js/tts.js"></script>
   <script>
     /* ============================================================
      * 历史脉络页 JS（纯原生，无框架）
@@ -346,6 +352,8 @@
       // 同一朝代或动画进行中时不响应，防止连点导致状态错乱
       if (index === currentIndex || isSwitching) return;
       isSwitching = true;
+      // 切换朝代：自动停止朗读并清高亮/微光，避免上一朝代残留（stopDynastyReading 见语音朗读段）
+      stopDynastyReading();
       // 淡出拼图
       gallery.classList.add('fade-out');
       setTimeout(() => {
@@ -385,26 +393,79 @@
       }
     }
 
-    // ===== 【语音朗读】浏览器原生 TTS =====
-    function speakCurrentDynasty() {
-      const d = DYNASTIES[currentIndex];
-      const fullText = d.name + '，' + d.year + '。' + d.texts.join('');
-      if ('speechSynthesis' in window) {
-        // 停止之前的朗读
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(fullText);
-        utterance.lang = 'zh-CN';
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        // 朗读时添加微光效果
-        page.classList.add('speaking');
-        utterance.onend = () => page.classList.remove('speaking');
-        utterance.onerror = () => page.classList.remove('speaking');
-        window.speechSynthesis.speak(utterance);
-      } else {
-        alert('您的浏览器不支持语音朗读功能');
-      }
+    // ===== 【语音朗读】统一走全站公共模块 WoodWhisperTTS（js/tts.js） =====
+    // 页面不再直接调用 speechSynthesis：朗读/停止/降级/生命周期自动停止均由模块处理。
+    // 朗读内容只读正文段落（朝代名+年份仅作页面展示，不进朗读）；不做任何逐句/逐段文字标亮，
+    // 不做页面 .speaking 微光；朗读中按钮只保留朴素的「朗读中·点击停止」态（换 aria/文案）。
+    let ttsHintTimer = null;   // 不可用轻提示的还原计时器
+
+    function ttsAvailable() {
+      return !!(window.WoodWhisperTTS && typeof window.WoodWhisperTTS.speakContent === 'function');
     }
+
+    // 清理本页朗读痕迹（幂等）：仅还原按钮态/提示态
+    function clearDynastyReading() {
+      if (ttsHintTimer) { clearTimeout(ttsHintTimer); ttsHintTimer = null; }
+      speakBtn.classList.remove('tts-unavailable');
+      speakBtn.setAttribute('aria-label', '点击听讲解');
+      const lbl = speakBtn.querySelector('span');
+      if (lbl && lbl.textContent !== '点击听讲解') lbl.textContent = '点击听讲解';
+    }
+
+    // 切换朝代 / 离开页面时的统一停止入口：模块存在才调 stop()，随后还原按钮态
+    // 离开页面由模块 bindAutoStop 在 visibilitychange/pagehide 时回调本函数（经 onCancel）。
+    function stopDynastyReading() {
+      if (ttsAvailable()) WoodWhisperTTS.stop();
+      clearDynastyReading();
+    }
+
+    // 朗读中按钮态（朴素态：仅切 aria-label/文案，无发光动画）
+    function setSpeakBtnReading(on) {
+      speakBtn.setAttribute('aria-label', on ? '停止朗读' : '点击听讲解');
+      const lbl = speakBtn.querySelector('span');
+      if (lbl) lbl.textContent = on ? '朗读中·点击停止' : '点击听讲解';
+    }
+
+    function onDynastyReadStart() {
+      setSpeakBtnReading(true);
+    }
+
+    // 引擎不可用（无静态音频且无原生语音）时的轻量提示，2.4s 后自动还原
+    function onDynastyReadUnavailable() {
+      clearDynastyReading();
+      const lbl = speakBtn.querySelector('span');
+      speakBtn.classList.add('tts-unavailable');
+      if (lbl) lbl.textContent = '暂不支持朗读';
+      ttsHintTimer = setTimeout(function () {
+        clearDynastyReading(); // 还原按钮文案/aria 并移除提示态
+      }, 2400);
+    }
+
+    // ===== 【语音按钮】点击：朗读 / 停止切换 =====
+    speakBtn.addEventListener('click', function () {
+      if (!ttsAvailable()) {
+        onDynastyReadUnavailable();
+        return;
+      }
+      // 正在朗读（含等待清单）→ 点击停止（stop 会经 onCancel 完成清理）
+      if (WoodWhisperTTS.isSpeaking()) {
+        WoodWhisperTTS.stop();
+        return;
+      }
+
+      const d = DYNASTIES[currentIndex];
+      if (!d) return;
+
+      // 先清上一轮残留（幂等）；再朗读当前朝代正文（不含名称/年份段）
+      clearDynastyReading();
+      WoodWhisperTTS.speakContent('dynasty-' + d.key, {
+        fallbackText: d.texts.join(''),
+        onStart: onDynastyReadStart,
+        onEnd: clearDynastyReading,
+        onCancel: clearDynastyReading,
+        onUnavailable: onDynastyReadUnavailable
+      });
+    });
 
     // ===== 【Lightbox】全屏弹窗 + 双指缩放 =====
     let currentScale = 1;
@@ -540,13 +601,13 @@
       }
     });
 
-    // ===== 【语音按钮】 =====
-    speakBtn.addEventListener('click', speakCurrentDynasty);
-
     // ===== 【初始化渲染】默认显示唐朝 =====
     renderTimeline();
     renderGallery(0);
     renderDynastyCard(0);
+
+    // 页面初始化：绑定切后台/离开页自动停止朗读（模块在 js/tts.js 加载时已自绑一次，此处幂等调用）
+    if (ttsAvailable()) WoodWhisperTTS.bindAutoStop();
 
     // 新手验证提示：打开控制台输入以下命令验证
     // console.log('朝代数量:', DYNASTIES.length);       // 应为 5

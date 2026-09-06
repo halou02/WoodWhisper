@@ -30,3 +30,31 @@
 - Agnes 的可用额度和限流由 Agnes 控制台决定。
 - 不要在任何页面、提交、Issue、截图或聊天中粘贴 API Key。已经暴露过的 Key 必须撤销并重建。
 - 接口只允许来自 GitHub Pages 的请求，并限制每个 IP 每分钟 12 次请求。
+
+## 新增：TTS 语音侧端（api/tts.js）
+
+### 作用
+
+- 让 AI 页的**动态回复语音**与**静态语音**使用完全相同的音色：Edge-tts `zh-CN-XiaoxiaoNeural`（晓晓，温柔女声），输出 `audio-24khz-32kbitrate-mono-mp3`（24kHz 单声道 32kbps mp3），与 `scripts/gen-tts-audio.mjs` 预合成静态音频的参数完全一致。
+- 后端逐句**实时合成**，前端复用同一个隐藏 `<audio>` 逐句播放（与静态音频同一套驱动机制），句间 120ms，逐句高亮、支持停止。
+
+### 部署
+
+- 新增 `api/tts.js` 随 `api/chat.js` 一同在 Vercel 部署（同一 Vercel 项目，无需额外配置路由）。
+- `vercel.json` 已为 `api/tts.js` 配置 `maxDuration: 60`（单次合成含逐句耗时，需较长超时上限）。
+- 若 `node-edge-tts` 在 Vercel 打包时报「模块缺失」，需确认它被该函数依赖正确解析（可在需要时将其移入 `dependencies`）。
+
+### 环境变量
+
+- 复用现有的 `ALLOWED_ORIGIN`（同源校验，与 `api/chat.js` 一致），无需新增环境变量。
+- 无需额外 Secret：TTS 走免费的 Edge-tts 在线接口，不持有任何 API Key。
+
+### 前端接线
+
+- 在 `js/ai-config.js` 中配置 `window.WOODWHISPER_TTS_URL = 'https://wood-whisper.vercel.app/api/tts'`（把它换成你实际的 Vercel 域名，勿照抄示例）。
+- 页面未配置该变量时，`js/tts.js` 会自动回退到相对路径 `/api/tts`。
+
+### 风险 / 降级
+
+- Edge-tts 为微软非官方接口，偶有被限流 / 超时 / 失效的风险，无 SLA。
+- 侧端不可用（请求失败、超时、返回空句、合成缺失）时，前端 `js/tts.js` 会自动回退到浏览器原生 `speechSynthesis` 逐句朗读，不影响「朗读」功能的可用性。

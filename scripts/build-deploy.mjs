@@ -6,6 +6,7 @@ const deployRoot = resolve(projectRoot, '.edgeone-build');
 const entries = [
   'css',
   'js',
+  'assets',
   'ai.html',
   'history.html',
   'index.html',
