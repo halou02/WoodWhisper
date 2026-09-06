@@ -38,6 +38,202 @@
     var btnViewMasters = document.getElementById('btnViewMasters');
     var btnMyPersistence = document.getElementById('btnMyPersistence');
 
+    // ===== 【TTS 朗读接入（Task 3/8）】 =====
+    // 复用公共运行时 WoodWhisperTTS（js/tts.js，页面已保证在其它脚本前引入）。
+    // 说明：模块的 createReadButton 一经创建即绑定固定 contentId/text，其内部点击回调不透出
+    //   onStart/onEnd，无法满足"弹窗内每次打开/切换内容重绑"的场景；故页面侧按模块公开 API
+    //   （speakContent / speakText / stop）自建语义等价的小喇叭，样式/aria 沿用 .tts-read-btn。
+    // 按 2026-09 试听反馈：朗读不做文字逐句/逐段高亮（prepareHighlight/setHighlight 等不再调用）。
+    var TTS_SPEAKER_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+      '<path d="M11 5 6 9H2v6h4l5 4V5z"></path>' +
+      '<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>' +
+      '<path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>';
+    var ttsLastQuote = '';           // 最近一次 createFloatingText 生成的语录（供"朗读语录"按钮取用）
+    var currentMasterReadIndex = -1; // 当前弹窗大师在 MASTERS 中的索引（-1=未定位）
+    var masterReadHost = null;       // 大师弹窗朗读小喇叭挂载点（惰性创建，置于 story 上沿）
+    var blessingReadHost = null;     // 祝福语面板朗读小喇叭挂载点（惰性创建，置于正文与关闭钮之间）
+
+    // 触发模块注入 .tts-read-btn 等公共按钮样式：本页朗读按钮为自建喇叭（未直接调用
+    // createReadButton），此处借其公开入口在脱离文档的容器上创建一次按钮，仅产生模块
+    // 内部 ensureStyle() 的样式注入副作用（幂等，重复调用无影响）。
+    (function seedTtsUiStyles() {
+      var tts = window.WoodWhisperTTS;
+      if (!tts) { return; }
+      var holder = document.createElement('div');
+      tts.createReadButton({ container: holder, text: '' });
+    })();
+
+    // 页面加载即预热 manifest：静态音频尚未生成时 fetch 404 会缓存 null，
+    // 之后用户手势点击可直接走 native 同步朗读（避免首句卡在 promise 续延而受 iOS 手势限制）
+    (function warmTtsManifest() {
+      var tts = window.WoodWhisperTTS;
+      if (!tts || tts.manifest !== undefined) { return; }
+      try { tts.loadManifest(); } catch (err) { /* 朗读时再兜底处理 */ }
+    })();
+
+    // 页面级轻 toast：金褐调、1.6s 自动消失、fixed 定位不占布局
+    function showTtsToast(msg) {
+      var el = document.createElement('div');
+      el.setAttribute('role', 'status');
+      el.textContent = msg || '当前浏览器不支持语音朗读';
+      el.style.cssText = 'position:fixed;left:50%;bottom:64px;z-index:99999;transform:translate(-50%,0);' +
+        'max-width:82vw;box-sizing:border-box;padding:9px 16px;border:1px solid rgba(212,175,55,.55);' +
+        'border-radius:10px;background:rgba(30,20,8,.94);color:#f4e3b2;font-size:13px;line-height:1.5;' +
+        'text-align:center;pointer-events:none;opacity:0;transition:opacity .22s ease;';
+      (document.body || document.documentElement).appendChild(el);
+      setTimeout(function () { el.style.opacity = '1'; }, 30);
+      setTimeout(function () {
+        el.style.opacity = '0';
+        setTimeout(function () { if (el.parentNode) { el.parentNode.removeChild(el); } }, 240);
+      }, 1600);
+    }
+
+    // 创建"朗读/停止"小喇叭：外观与模块 .tts-read-btn 一致，朗读中再点即停。
+    // cfg：{ contentId?, text?, fallbackText? }（contentId 优先，否则走 text；不做文字高亮）
+    function createReadSpeaker(container, cfg) {
+      var tts = window.WoodWhisperTTS;
+      if (!tts || !container || typeof container.appendChild !== 'function') { return null; }
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tts-read-btn';
+      btn.setAttribute('aria-label', '朗读');
+      btn.innerHTML = TTS_SPEAKER_SVG;
+      var token = 0;
+      var unavailable = false;
+      function setActive(on) {
+        btn.classList.toggle('tts-read-btn--active', !!on);
+        btn.setAttribute('aria-label', on ? '停止' : '朗读');
+      }
+      function markUnavailable(msg) {
+        token = 0;
+        setActive(false);
+        showTtsToast(msg);
+        if (!unavailable) {
+          unavailable = true;
+          btn.disabled = true;
+          btn.classList.add('tts-read-btn--unavailable');
+          btn.setAttribute('aria-disabled', 'true');
+        }
+      }
+      btn.addEventListener('click', function () {
+        // 本喇叭正在朗读（含 manifest 挂起）→ 再点即停
+        if (token) { token = 0; setActive(false); tts.stop(); return; }
+        var opts = {
+          fallbackText: cfg.fallbackText || '',
+          onStart: function () { if (!token) { token = 1; } setActive(true); },
+          onEnd: function () { token = 0; setActive(false); },
+          onCancel: function () { token = 0; setActive(false); },
+          onUnavailable: markUnavailable
+        };
+        var t;
+        if (cfg.contentId) {
+          // manifest 已确认不可用（加载失败/不存在）→ 手势内直接 native 同步朗读兜底文案
+          if (tts.manifest === null && cfg.fallbackText && String(cfg.fallbackText).trim()) {
+            t = tts.speakText(String(cfg.fallbackText), opts);
+          } else {
+            t = tts.speakContent(String(cfg.contentId), opts);
+          }
+        } else if (cfg.text && String(cfg.text).trim()) { t = tts.speakText(String(cfg.text), opts); }
+        if (t) { token = t; }
+      });
+      container.appendChild(btn);
+      return btn;
+    }
+
+    // 大师详情弹窗：story 上沿的朗读小喇叭挂载点（惰性创建一次，内容每次重建）
+    function ensureMasterReadHost() {
+      if (!masterReadHost) {
+        masterReadHost = document.createElement('div');
+        masterReadHost.className = 'inherit-modal__read';
+        if (modalStory && modalStory.parentNode) { modalStory.parentNode.insertBefore(masterReadHost, modalStory); }
+      }
+      return masterReadHost;
+    }
+
+    // 重新为当前大师绑定朗读：重建喇叭（不做文字逐句高亮包装）
+    function refreshMasterStorySpeaker() {
+      var tts = window.WoodWhisperTTS;
+      var m = (currentMasterReadIndex >= 0 && currentMasterReadIndex < MASTERS.length) ? MASTERS[currentMasterReadIndex] : null;
+      if (!tts || !modalStory || !m) { return; }
+      var host = ensureMasterReadHost();
+      if (host) { host.innerHTML = ''; } // 旧喇叭随内容切换一并移除
+      if (host) {
+        createReadSpeaker(host, {
+          contentId: 'master-' + currentMasterReadIndex,
+          fallbackText: m.story || ''
+        });
+      }
+    }
+
+    // 祝福语面板：正文下方注入朗读小喇叭挂载点（惰性创建一次，内容每次重建）
+    function ensureBlessingReadHost() {
+      if (!blessingReadHost) {
+        blessingReadHost = document.createElement('div');
+        blessingReadHost.className = 'jiangyu-blessing__read';
+        if (jiangyuBlessingText && jiangyuBlessingClose && jiangyuBlessingText.parentNode) {
+          jiangyuBlessingText.parentNode.insertBefore(blessingReadHost, jiangyuBlessingClose);
+        }
+      }
+      return blessingReadHost;
+    }
+
+    // 重新为当前祝福语绑定朗读：contentId=blessing-<索引>（不做文字逐句高亮）
+    function refreshBlessingSpeaker(idx, text) {
+      var tts = window.WoodWhisperTTS;
+      if (!tts || !jiangyuBlessingText) { return; }
+      var host = ensureBlessingReadHost();
+      if (host) { host.innerHTML = ''; }
+      if (host) {
+        createReadSpeaker(host, {
+          contentId: 'blessing-' + idx,
+          fallbackText: text || ''
+        });
+      }
+    }
+
+    // 匠语漫行模态内"朗读语录"小喇叭（左上角）：朗读最近一条飘字主句，暂无则随机一条
+    function createQuoteReadControl() {
+      var tts = window.WoodWhisperTTS;
+      if (!tts || !jiangyuModal) { return; }
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tts-read-btn jiangyu-quote-read';
+      btn.setAttribute('aria-label', '朗读最近匠语语录');
+      btn.innerHTML = TTS_SPEAKER_SVG + '<span class="jiangyu-quote-read__label">朗读语录</span>';
+      var active = false;
+      var unavailable = false;
+      function setActive(on) {
+        active = !!on;
+        btn.classList.toggle('tts-read-btn--active', !!on);
+        btn.setAttribute('aria-label', on ? '停止朗读语录' : '朗读最近匠语语录');
+      }
+      function markUnavailable(msg) {
+        active = false;
+        setActive(false);
+        showTtsToast(msg);
+        if (!unavailable) {
+          unavailable = true;
+          btn.disabled = true;
+          btn.classList.add('tts-read-btn--unavailable');
+          btn.setAttribute('aria-disabled', 'true');
+        }
+      }
+      btn.addEventListener('click', function () {
+        if (active) { active = false; setActive(false); tts.stop(); return; }
+        var q = ttsLastQuote || JIANGYU_QUOTES[Math.floor(Math.random() * JIANGYU_QUOTES.length)] || '';
+        if (!q) { return; }
+        var t = tts.speakText(q, {
+          fallbackText: q,
+          onStart: function () { setActive(true); },
+          onEnd: function () { setActive(false); },
+          onCancel: function () { setActive(false); },
+          onUnavailable: markUnavailable
+        });
+        if (t) { active = true; }
+      });
+      jiangyuModal.appendChild(btn);
+    }
+
     // ===== 【年轮弹窗 v3 DOM引用】所有新弹窗元素 =====
     // 人话讲：一次性把所有要用的DOM元素都取出来存变量里，避免每次操作都querySelector
     var ringModal = document.getElementById('ringModal');
@@ -807,6 +1003,21 @@
       else if (m.level === 'folk') modalLevel.classList.add('inherit-modal__level--folk');
       modalStory.textContent = m.story;
 
+      // ===== 【朗读】每次打开/切换大师：先停旧朗读，再定位索引并重绑喇叭 =====
+      var ttsApi = window.WoodWhisperTTS;
+      if (ttsApi) {
+        ttsApi.stop(); // 切换大师(chip)/重开弹窗时停掉上一段朗读（stop 幂等）
+        // 定位该大师在 MASTERS 中的索引：先 indexOf 对象引用，回退按 name 匹配
+        var masterIdx = MASTERS.indexOf(m);
+        if (masterIdx < 0) {
+          for (var mi = 0; mi < MASTERS.length; mi++) {
+            if (MASTERS[mi] && MASTERS[mi].name === m.name) { masterIdx = mi; break; }
+          }
+        }
+        currentMasterReadIndex = masterIdx;
+        refreshMasterStorySpeaker();
+      }
+
       // 师承脉络：按当前匠人查 LINEAGE 渲染 chips（无数据则整块隐藏）
       renderLineage(m);
 
@@ -823,6 +1034,8 @@
       void modalPanel.offsetWidth; // 强制 reflow，重置动画状态
       modalPanel.classList.add('inherit-modal__panel--enter');
 
+      // 禁止背景页面滚动（与年轮弹窗/匠语漫行一致）
+      document.body.style.overflow = 'hidden';
       masterModal.classList.add('inherit-modal--open');
       masterModal.setAttribute('aria-hidden', 'false');
       modalClose.focus();
@@ -875,8 +1088,14 @@
     });
 
     function closeMasterModal() {
+      // 关闭弹窗即停止朗读
+      if (window.WoodWhisperTTS) {
+        window.WoodWhisperTTS.stop();
+      }
       masterModal.classList.remove('inherit-modal--open');
       masterModal.setAttribute('aria-hidden', 'true');
+      // 恢复背景页面滚动
+      document.body.style.overflow = '';
       document.removeEventListener('keydown', onEscCloseModal);
       if (lastMasterTrigger) lastMasterTrigger.focus();
       // 弹窗已关：解除 marquee 的 modal 暂停源 + 重置闲置计时，4s 后自动续漂（见【常驻动效】模块）
@@ -1853,6 +2072,10 @@
     // 关闭匠语漫行模态
     // 人话讲：隐藏模态，恢复页面滚动，停止飘字，同时关闭祝福语弹窗
     function closeJiangyuModal() {
+      // 退出模态即停止朗读
+      if (window.WoodWhisperTTS) {
+        window.WoodWhisperTTS.stop();
+      }
       jiangyuModal.classList.remove('visible');
       jiangyuModal.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
@@ -1910,6 +2133,8 @@
     // 人话讲：清除定时器，清空飘字区域，重置计数，同时重置所有轨道为空闲状态
     // 新手易错点：动画结束后一定要移除DOM元素，否则会内存泄漏；还要重置轨道占用状态
     function stopFloatingTexts() {
+      // 飘字动画全停（退出匠语漫行模态路径之一）：一并停止朗读
+      if (window.WoodWhisperTTS) { window.WoodWhisperTTS.stop(); }
       if (jiangyuInterval) {
         clearInterval(jiangyuInterval);
         jiangyuInterval = null;
@@ -1944,6 +2169,8 @@
 
       // 第四步：创建DOM元素
       var text = JIANGYU_QUOTES[Math.floor(Math.random() * JIANGYU_QUOTES.length)];
+      // 记录最近一条语录文本：供模态内"朗读语录"按钮朗读当前主句
+      ttsLastQuote = text;
       var item = document.createElement('div');
       item.className = 'jiangyu-floating__item';
       item.textContent = text;
@@ -1978,28 +2205,39 @@
       });
     }
 
-    // 点击光球：显示随机祝福语
+    // 点击光球：显示随机祝福语（正文接入朗读喇叭：contentId=blessing-<索引>，不做文字高亮）
     jiangyuOrb.addEventListener('click', function() {
-      var blessing = JIANGYU_BLESSINGS[Math.floor(Math.random() * JIANGYU_BLESSINGS.length)];
+      // 打开新祝福语前：先停旧朗读
+      if (window.WoodWhisperTTS) { window.WoodWhisperTTS.stop(); }
+      var blessingIdx = Math.floor(Math.random() * JIANGYU_BLESSINGS.length);
+      var blessing = JIANGYU_BLESSINGS[blessingIdx];
       jiangyuBlessingText.textContent = blessing;
+      refreshBlessingSpeaker(blessingIdx, blessing);
       jiangyuBlessing.classList.add('visible');
       jiangyuBlessing.setAttribute('aria-hidden', 'false');
     });
 
-    // 关闭祝福语
-    jiangyuBlessingClose.addEventListener('click', function() {
+    // 关闭祝福语（关闭按钮 / 点遮罩共用：退出即停朗读）
+    function closeJiangyuBlessing() {
+      if (window.WoodWhisperTTS) {
+        window.WoodWhisperTTS.stop();
+      }
       jiangyuBlessing.classList.remove('visible');
       jiangyuBlessing.setAttribute('aria-hidden', 'true');
-    });
+    }
+    jiangyuBlessingClose.addEventListener('click', closeJiangyuBlessing);
 
     // 点击遮罩也关闭祝福语
-    jiangyuBlessing.querySelector('.jiangyu-blessing__overlay').addEventListener('click', function() {
-      jiangyuBlessing.classList.remove('visible');
-      jiangyuBlessing.setAttribute('aria-hidden', 'true');
-    });
+    jiangyuBlessing.querySelector('.jiangyu-blessing__overlay').addEventListener('click', closeJiangyuBlessing);
 
     // 右上角关闭模态
     jiangyuClose.addEventListener('click', closeJiangyuModal);
+
+    // 模态内"朗读语录"控制：朗读最近一条飘字主句（暂无则随机一条）
+    createQuoteReadControl();
+
+    // 页面入口：绑定切后台/关闭页面自动停止朗读（模块加载时已自动绑定一次，此处幂等确保）
+    if (window.WoodWhisperTTS) { window.WoodWhisperTTS.bindAutoStop(); }
 
     // 修改按钮点击行为：匠语漫行
     btnViewMasters.addEventListener('click', openJiangyuModal);

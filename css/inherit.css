@@ -1,20 +1,18 @@
 /* 传承页专属样式，由 inherit.html 拆分；保持原有视觉、动画与响应式规则。 */
+/* ============================================================
+ * 传承页专属样式（v2 重设计版）
+ * 这一段在干什么：
+ *   定义传承页的黑金双模式变量、匠人卡片错落布局、
+ *   固定金线标注、年轮弹窗、木屑粒子等所有模块的样式。
+ *   相比 v1：移除了视差层样式，新增了固定标注/金线样式，
+ *   重写了卡片焦点态和按钮样式。
+ * ============================================================ */
 
-  <style>
-    /* ============================================================
-     * 传承页专属样式（v2 重设计版）
-     * 这一段在干什么：
-     *   定义传承页的黑金双模式变量、匠人卡片错落布局、
-     *   固定金线标注、年轮弹窗、木屑粒子等所有模块的样式。
-     *   相比 v1：移除了视差层样式，新增了固定标注/金线样式，
-     *   重写了卡片焦点态和按钮样式。
-     * ============================================================ */
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow-x: hidden;
-    }
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
     /* 夜间模式：宽屏两侧黑边；日间模式：宽屏两侧宣纸色 */
     body.dark { background: #000; }
     body:not(.dark) { background: #f0e8d8; }
@@ -74,8 +72,8 @@
       background-color: var(--inherit-bg); /* 兜底色，图片加载前显示 */
       position: relative;
       overflow-x: hidden;
-      /* 底部留出导航栏高度 + 刘海安全区 */
-      padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+      /* 底部留出导航栏高度 + 刘海安全区 + 双按钮与导航之间的安全余量 */
+      padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
       /* 颜色切换 0.4s 平滑过渡 */
       transition: color 0.4s ease;
     }
@@ -225,8 +223,9 @@
     .inherit-cards-section {
       position: relative;
       z-index: 10;
-      padding: 6px 0 8px;
-      margin-top: 3vh;
+      padding: 8px 0 8px;
+      margin-top: 5vh;
+      margin-bottom: 16px;
     }
 
     .inherit-cards-scroll {
@@ -562,7 +561,8 @@
       flex-direction: column;
       align-items: center;
       padding: 12px 20px 4px;
-      margin-top: 4px;
+      margin-top: 24px;
+      margin-bottom: 20px;
       pointer-events: none;
     }
 
@@ -712,7 +712,8 @@
       z-index: 10;
       display: flex;
       gap: 12px;
-      padding: 4px 20px 12px;
+      padding: 16px 20px 20px;
+      margin-top: 24px;
       justify-content: center;
     }
 
@@ -891,6 +892,12 @@
       line-height: 1.7;
       color: var(--inherit-text);
       text-indent: 2em;
+    }
+
+    /* 大师弹窗朗读小喇叭挂载点：story 上沿居中一行（喇叭本体样式由 js/tts.js 注入 .tts-read-btn） */
+    .inherit-modal__read {
+      margin: 0 0 10px;
+      text-align: center;
     }
 
     /* ===== 10.1 传承脉络区（弹窗内）=====
@@ -1627,14 +1634,14 @@
       .inherit-title { font-size: 34px; }
       .inherit-subtitle { font-size: 16px; }
       .inherit-title-area { padding-top: 20px; }
-      .inherit-cards-section { margin-top: 3vh; }
+      .inherit-cards-section { margin-top: 5vh; }
       .inherit-card--featured { transform: scale(1.025) translateY(2px) !important; }
       .inherit-card { transform: translateY(-2px) scale(0.94); }
       .inherit-timeline { padding: 10px 20px 4px; }
       .inherit-label { font-size: 15px; }
       .inherit-gold-line { height: 22px; }
       .inherit-transition-text { margin-top: 8px; padding: 8px 20px 6px; }
-      .inherit-actions { padding: 4px 16px 8px; }
+      .inherit-actions { padding: 12px 16px 16px; margin-top: 44px; }
     }
 
     /* 390px以下屏幕：过渡文字适当缩小 */
@@ -1654,7 +1661,7 @@
       .inherit-label { font-size: 14px; }
       .inherit-gold-line { height: 20px; margin: 2px 0; }
       .inherit-transition-text { margin-top: 6px; font-size: 15px; padding: 6px 16px 6px; }
-      .inherit-actions { padding: 4px 12px 8px; gap: 8px; }
+      .inherit-actions { padding: 12px 12px 16px; gap: 8px; }
     }
 
     /* ===== 宽屏适配：9:16比例锁定后，顶部按钮和粒子层对齐页面内容区 =====
@@ -1873,6 +1880,34 @@
     .jiangyu-blessing__close:active {
       transform: scale(0.96);
       filter: brightness(0.95);
+    }
+
+    /* 祝福语朗读小喇叭挂载点：正文与关闭按钮之间（喇叭本体样式由 js/tts.js 注入） */
+    .jiangyu-blessing__read {
+      margin: -14px 0 16px;
+      text-align: center;
+    }
+
+    /* 匠语漫行模态内"朗读语录"小喇叭：左上角，与右上角关闭键呼应
+       选择器带 .tts-read-btn 提升优先级：js/tts.js 运行时会向 <head> 注入公共样式，
+       同优先级下后注入者会覆盖本文件，故用双类选择器保证左上角布局与深底生效 */
+    .tts-read-btn.jiangyu-quote-read {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 12;
+      gap: 6px;
+      min-width: 0;
+      padding: 8px 14px;
+      border-radius: 20px;
+      background: rgba(0, 0, 0, 0.35);
+    }
+    .jiangyu-quote-read .jiangyu-quote-read__label {
+      font-family: var(--font-serif, 'STKaiti', 'KaiTi', serif);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      color: inherit;
     }
 
     /* 手机端适配：窄屏下调整各元素尺寸和位置

@@ -293,6 +293,9 @@
 
   </div>
 
+  <!-- 全站统一朗读运行时：必须在其它页面脚本之前引入（WoodWhisperTTS 就绪后，页面脚本才能安全调用）
+       页面脚本都在 body 底部，DOM 已解析完毕，tts.js 只需依赖 document 创建元素，时机安全 -->
+  <script src="js/tts.js"></script>
   <!-- 引入全站公共工具函数（escapeHtml、safeColor），必须在内联脚本之前加载 -->
   <script src="js/common.js"></script>
   <script src="js/inherit-data.js"></script>

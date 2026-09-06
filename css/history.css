@@ -675,16 +675,6 @@
       }
     }
 
-    /* ===== 9. 朗读时底层暗纹微光动画 ===== */
-    .history-page.speaking::before {
-      animation: subtleGlow 3s ease-in-out infinite alternate;
-    }
-
-    @keyframes subtleGlow {
-      0% { opacity: 0.5; }
-      100% { opacity: 1; }
-    }
-
     /* ===== 10. 底部导航（复用 style.css，此处补充历史页 active 高亮） ===== */
     /* 已在 style.css 中定义，无需重复 */
 
