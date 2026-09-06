@@ -21,9 +21,6 @@
   <!-- 引入全站唯一样式表 style.css，类名严格遵循 BLUEPRINT.md -->
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/ai.css">
-  <script src="js/ai-config.js"></script>
-  <!-- 注：js/ai-config.js 中的 WOODWHISPER_TTS_URL 供 js/tts.js 读取（TTS 侧端 Edge-tts 地址），本行必须先于 js/tts.js 加载，现已满足。 -->
-
   <!--
     ============================================================
     【AI聊天页专属样式】仿古宣纸米白浅色系风格
@@ -39,46 +36,6 @@
     ============================================================
   -->
   <style>
-    /* AI 回复气泡「重听/停止」小喇叭：与 .chat__mark 徽记同一行流、
-       淡金线描圆形小按钮，贴合纸笺气泡质感（样式仅存于 ai.html） */
-    .chat__replay {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      box-sizing: border-box;
-      width: 26px;
-      height: 26px;
-      margin-left: 10px;
-      padding: 0;
-      border: 1px solid rgba(201, 162, 39, 0.5);
-      border-radius: 50%;
-      background: transparent;
-      color: rgba(176, 138, 46, 0.9);
-      cursor: pointer;
-      vertical-align: -3px;
-      line-height: 1;
-      -webkit-appearance: none;
-      appearance: none;
-      -webkit-tap-highlight-color: transparent;
-      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-    }
-    .chat__replay svg {
-      display: block;
-      width: 14px;
-      height: 14px;
-      margin: auto;
-      pointer-events: none;
-    }
-    .chat__replay:hover {
-      background: rgba(201, 162, 39, 0.14);
-      border-color: rgba(201, 162, 39, 0.75);
-    }
-    /* 朗读中（=点击停止）：淡金底加深，与数字人发光呼应 */
-    .chat__replay--active {
-      background: rgba(201, 162, 39, 0.28);
-      color: #8a6d1f;
-      border-color: rgba(201, 162, 39, 0.8);
-    }
   </style>
 </head>
 <body>
@@ -330,14 +287,11 @@
 
   <!--
     ============================================================
-    核心脚本区：语音识别 + AI 服务代理 + TTS 朗读 + 张嘴动画 + 粒子系统
+    核心脚本区：语音识别（长按输入）+ AI 服务直连 + 数字人动画 + 粒子系统
     放在 </body> 前，确保上面 DOM 都加载完再执行。
     人话讲：先搭好舞台（HTML），再请演员（JS）登场，顺序反了会找不到元素。
     ============================================================
   -->
-  <!-- 全站统一朗读运行时（WoodWhisperTTS）：必须在页面主脚本之前加载，
-       页面不再直接读写 speechSynthesis，只通过 window.WoodWhisperTTS 调用 -->
-  <script src="js/tts.js"></script>
   <script>
   /* ============================================================
    * 【A 区】AI 服务配置（Agnes AI 直连）
@@ -468,7 +422,7 @@
 - 不得杜撰未记载的历史朝代细节。
 - 涉及当代市场价、鉴定、拍卖的问题，统一以上述固定话术回避。
 - 回答语言使用简体中文，亲切口语化，避免学术腔。
-- 单次回答控制在 300 字以内，便于 TTS 朗读。`;
+- 单次回答控制在 300 字以内，简洁明了。`;
 
 
   /* 冻结视口高度：防止软键盘弹出时 100vh/100dvh 重算导致页面压缩变窄 */
@@ -575,14 +529,15 @@
     compare: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/></svg>' // 双纹对比
   };
 
-  // 话题列表（6个引导话题：icon 对应 TOPIC_ICONS 的 key，text 为纯文本）
+  // 话题列表（6个引导话题：icon 对应 TOPIC_ICONS 的 key，text 为纯文本，
+  // answer 为精选定稿答案（点击仅显示文字气泡、不再调 LLM、不播放语音）
   const TOPICS = [
-    { icon: 'lattice', text: '蟹篓镂空技法有多难？' },
-    { icon: 'gold',     text: '金漆木雕为什么贴金箔？' },
-    { icon: 'seal',     text: '大师们有哪些代表作？' },
-    { icon: 'scroll',   text: '潮州木雕有多少年历史？' },
-    { icon: 'knife',    text: '木雕需要哪些特殊工具？' },
-    { icon: 'compare',  text: '和东阳木雕有什么区别？' }
+    { icon: 'lattice', text: '蟹篓镂空技法有多难？', answer: '蟹篓镂空是潮州木雕最高难度的技法之一。匠人要在一块整木上镂出竹编的蟹篓与篓中蠕动的螃蟹，篓篓相套，层层通空。蟹足纤毫毕现，螃蟹活灵活现，稍有不慎整料作废，非十年功底难以企及。' },
+    { icon: 'gold',     text: '金漆木雕为什么贴金箔？', answer: '金漆木雕以生漆打底、贴上金箔，让木雕金碧辉煌、富贵吉祥。潮州地处沿海，商贸繁荣，百姓喜好用金色彰显家族的富足。贴金既能防腐防潮，又能在光线中流转生辉，让雕刻的细节层次更加夺目。' },
+    { icon: 'seal',     text: '大师们有哪些代表作？', answer: '潮州木雕有众多传世名作。张鉴轩、陈舜羌共创的圆雕蟹篓，曾在莫斯科世界青年联欢节赢得国际大奖；李得浓的锦上添花也屡获金奖。陈培臣用整根原木雕出的龙虾蟹篓，更是堪称一绝。' },
+    { icon: 'scroll',   text: '潮州木雕有多少年历史？', answer: '潮州木雕的历史可上溯至唐代，中原人口南迁带来了木构与雕刻技艺。经宋、明、清的不断发展，清代技艺登峰造极，蟹篓镂空成为绝活。2006年，潮州木雕入选首批国家级非物质文化遗产名录，距今已有千年传承。' },
+    { icon: 'knife',    text: '木雕需要哪些特殊工具？', answer: '潮州木雕讲究刀不离手，需要上百种形态各异的刻刀，有平刀、圆刀、三角刀、斜刀之分。匠人还要用到凿子、锤子、锼弓等工具，并掌握磨刀技巧。刀是手的延伸，磨刀磨的不仅是器，更是耐心。' },
+    { icon: 'compare',  text: '和东阳木雕有什么区别？', answer: '潮州木雕与东阳木雕并称中国两大木雕体系。东阳木雕以平面浮雕见长，构图疏朗；潮州木雕则以多层次镂通雕与立体圆雕著称，繁复工整，层层叠叠。潮州木雕还常施金漆，金碧辉煌，与东阳木雕的素色木材形成鲜明反差。' }
   ];
 
   // 显示欢迎语+话题卡片
@@ -599,8 +554,8 @@
       // 入场渐次浮现（stagger）：CSS 端负责动画，这里只给每张牌一个递增延迟
       card.style.animationDelay = (120 + i * 90) + 'ms';
       card.addEventListener('click', function() {
-        // 传纯文本（不再带 emoji），由 requestAiPrivacyConsent 提交给 AI
-        requestAiPrivacyConsent(topic.text);
+        // 预设话题：精选定稿答案，点击仅显示文字气泡（不再调 LLM、不播放语音）
+        playTopicAnswer(topic);
       });
       topicsDiv.appendChild(card);
     });
@@ -621,6 +576,16 @@
         }
       }, 300);
     }
+  }
+
+  // 预设话题：精选定稿答案（不调 LLM，断网也可用）
+  function playTopicAnswer(topic) {
+    if (!topic || !topic.text || !topic.answer) { return; }
+    if (isAiBusy) { return; } // 会话进行中不响应新话题，避免并发干扰
+    hideTopics();
+    // 一个问题气泡 + 精选定稿答案气泡
+    addBubble(topic.text, 'user');
+    addBubble(topic.answer, 'ai');
   }
 
   // 页面加载后初始化欢迎语
@@ -1240,45 +1205,6 @@
         mark.setAttribute('aria-label', 'AI 生成内容');
         mark.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M10.5 3.5c.9 3.8 2.2 5.1 6 6-3.8.9-5.1 2.2-6 6-.9-3.8-2.2-5.1-6-6 3.8-.9 5.1-2.2 6-6z"/><path d="M18 14.5c.45 1.9 1.1 2.55 3 3-1.9.45-2.55 1.1-3 3-.45-1.9-1.1-2.55-3-3 1.9-.45 2.55-1.1 3-3z"/></svg>';
         bubble.appendChild(mark);
-
-        // 「重听/停止」小喇叭：点击朗读本气泡文字（只读本气泡 text，不含话题卡/思考气泡）。
-        // 正在读本气泡时点击即停止；模块不可用/不支持朗读时点击静默（不报错、不卡界面）。
-        const replayBtn = document.createElement('button');
-        replayBtn.type = 'button';
-        replayBtn.className = 'chat__replay';
-        replayBtn.setAttribute('aria-label', '重听');
-        replayBtn.setAttribute('title', '重听');
-        replayBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-          'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
-          '<path d="M11 5 6 9H2v6h4l5 4V5z"></path>' +
-          '<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>' +
-          '<path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>';
-        const replayState = { token: 0 };
-        const syncReplayBtn = function (on) {
-          replayBtn.classList.toggle('chat__replay--active', !!on);
-          const label = on ? '停止' : '重听';
-          replayBtn.setAttribute('aria-label', label);
-          replayBtn.setAttribute('title', label);
-        };
-        replayBtn.addEventListener('click', function () {
-          const TTS = window.WoodWhisperTTS;
-          if (!TTS || typeof TTS.speakText !== 'function') { return; }
-          // 正在朗读本气泡 → 点击停止（点击本身即用户手势路径）
-          const activeTok = (typeof TTS.activeToken === 'function') ? TTS.activeToken() : 0;
-          if (replayState.token && replayState.token === activeTok &&
-              typeof TTS.isSpeaking === 'function' && TTS.isSpeaking()) {
-            TTS.stop(); // stop 内部会派发 tts:speakingcancel，按钮经 onCancel 复位
-            return;
-          }
-          // 朗读本气泡文字：speakText 内部会先停掉页面上其它朗读
-          const token = speakReply(text, {
-            onStart: function () { syncReplayBtn(true); },
-            onEnd: function () { syncReplayBtn(false); },
-            onCancel: function () { syncReplayBtn(false); }
-          });
-          if (token) { replayState.token = token; }
-        });
-        bubble.appendChild(replayBtn);
       } else {
         // 用户气泡：直接放文字
         bubble.textContent = text;
@@ -1329,6 +1255,8 @@
    *   choices[0].message.content 字段。
    * ============================================================ */
   async function callAiService(userText) {
+    // 数字人开始"说话"：先点亮光晕，随后进入思考/呈现回复
+    setAvatarSpeaking(true);
     // 1. 先同步显示"思考中"气泡（确保DOM先渲染出来，不被任何异步逻辑跳过）
     const thinkingBubble = showThinking();
     console.log('[AI] 思考气泡已添加到DOM，isConnected=', thinkingBubble.isConnected);
@@ -1353,7 +1281,6 @@
         await new Promise(r => setTimeout(r, Math.max(300, MIN_THINKING_MS - elapsed)));
         const fallback = '你好呀！我是潮州木雕非遗数字人小匠。我还没接上"大脑"——请打开 ai.html 源码顶部的【A 区】，把 AGNES_API_KEY 一行的 YOUR_AGNES_API_KEY_HERE 换成你在 platform.agnes-ai.com 申请的 Key，保存刷新后我就能真正回答问题啦！先给你讲个招牌绝技——蟹篓镂空：匠人以整段香樟木层层镂通，雕出编织篾纹与穿篾而过的螃蟹，蟹足纤毫毕现，寓意八方来财、富甲一方。';
         hideThinking(thinkingBubble, fallback);
-        speakReply(fallback);
         return;
       }
 
@@ -1401,7 +1328,6 @@
       const elapsed2 = Date.now() - startTime;
       await new Promise(r => setTimeout(r, Math.max(0, MIN_THINKING_MS - elapsed2)));
       hideThinking(thinkingBubble, safeReply);
-      speakReply(safeReply);
 
     } catch (err) {
       clearTimeout(timeoutId);
@@ -1423,6 +1349,8 @@
       const detail = err.status ? '（HTTP ' + err.status + '）' : '';
       hideThinking(thinkingBubble, 'AI 服务暂时不可用，请稍后重试。' + detail);
     } finally {
+      // finally 必然执行：任何异常/提前 return 出口都会复位数字人光晕
+      setAvatarSpeaking(false);
       isAiBusy = false;
       chatBox.setAttribute('aria-busy', 'false');
       recordBtn.disabled = false;
@@ -1434,77 +1362,37 @@
 
 
   /* ============================================================
-   * 【E 区】统一朗读（WoodWhisperTTS 模块驱动）+ 数字人说话动画
+   * 【E 区】数字人说话动画
    * ------------------------------------------------------------
-   * 这一段在干什么：AI 回复后调公共朗读模块 js/tts.js（window.WoodWhisperTTS）
-   *   的 speakText 朗读；本页不再直接读写 window.speechSynthesis（已收敛到模块内）。
-   * 数字人 .ai-avatar--speaking 光晕动画改由模块全局事件驱动：
-   *   tts:speakingstart → 加类；tts:speakingend / tts:speakingcancel → 移除，
-   *   停止/被新朗读取代/切后台时模块都会派发收尾事件，不会卡在发光态。
-   * 什么是 TTS：Text-To-Speech，文本转语音。人话讲：把字念给你听。
-   * 新手易错点：
-   *   1. speechSynthesis 需用户交互后才能触发（浏览器策略），按钮点击已满足；
-   *   2. 模块 speakText 全局只允许一路，内部会自动先停旧的，不会排队重叠；
-   *   3. 浏览器不支持朗读时 speakReply 静默返回，仅显示文字，不报错、不卡按钮。
-   *   验证：AI 回复时应听到朗读声 + 数字人金色光晕加强；念完应恢复。
+   * 这一段在干什么：数字人 .ai-avatar--speaking 光晕动画。
+   * 驱动方式：由 callAiService 里 AI 输出内容驱动
+   *   setAvatarSpeaking(true)（进入思考/开始呈现）与
+   *   setAvatarSpeaking(false)（回复呈现结束，位于 finally 复位）。
+   * 验证：调用 AI 时应先看到数字人光晕加强；回复定稿后光晕恢复。
    * ============================================================ */
 
-  // 页面统一的"朗读一段文字"入口：模块可用且支持原生语音才读，否则静默跳过
-  // （自动朗读不传 opts，数字人动画由模块 speakingstart/end/cancel 事件驱动）
-  function speakReply(text, opts) {
-    const TTS = window.WoodWhisperTTS;
-    if (!TTS || typeof TTS.speakText !== 'function') { return false; }
-    if (typeof TTS.supportsNative !== 'function' || !TTS.supportsNative()) { return false; }
-    return TTS.speakText(text, opts || {});
-  }
-
-  // 数字人说话动画：由模块全局事件驱动（模块在 start/end/stop 时派发）
+  // 数字人说话动画：进入思考/呈现回复时发光，回复结束复位
   function setAvatarSpeaking(on) {
     if (!digitalHuman) { return; }
     digitalHuman.classList.toggle('ai-avatar--speaking', !!on);
   }
-  document.addEventListener('tts:speakingstart', function () { setAvatarSpeaking(true); });
-  document.addEventListener('tts:speakingend', function () { setAvatarSpeaking(false); });
-  document.addEventListener('tts:speakingcancel', function () { setAvatarSpeaking(false); });
-
-  // 页面初始化时绑定页面生命周期自动停止（模块初始化已默认绑定一次，此处幂等确认；
-  // 切后台/关页时模块自动 stop 并派发 tts:speakingcancel，数字人动画随之复位）
-  if (window.WoodWhisperTTS && typeof window.WoodWhisperTTS.bindAutoStop === 'function') {
-    window.WoodWhisperTTS.bindAutoStop();
-  }
 
 
   /* ============================================================
-   * 【G 区】页面生命周期清理（beforeunload + visibilitychange）
+   * 【G 区】页面生命周期清理（beforeunload）
    * ------------------------------------------------------------
-   * 这一段在干什么：用户关页面/切后台时，主动停掉录音和朗读，避免资源泄漏
-   *   和后台继续念经的尴尬。
-   * 人话讲：演员下班前要卸妆关灯，不能让观众走了舞台还在演。
+   * 这一段在干什么：用户关页面时主动停掉还在录的音，避免资源泄漏。
+   * 人话讲：演员下班前要关好设备，不能让主人走了房间还在收音。
    * 新手易错点：
    *   1. recognition.stop() 在未启动时调用会抛错，必须 try-catch 兜底；
-   *   2. 朗读清理统一走模块 WoodWhisperTTS.stop()（内部 cancel speechSynthesis
-   *      并派发 tts:speakingcancel，数字人发光动画随之复位；stop 幂等可重复调用）。
-   *   验证：朗读中切到别的 Tab，应立刻听不到声音、数字人停止发光。
+   *   2. 录音清理由 recognition.stop() 负责（stop 幂等可重复调用）。
+   *   验证：录音中直接关页面，不会有后台收音残留。
    * ============================================================ */
 
-  // 页面卸载前清理资源。
-  //   人话讲：用户要关页了，赶紧把麦克风和喇叭都关掉，别留尾巴。
+  // 页面卸载前清理资源：停掉可能还在录的音。
   window.addEventListener('beforeunload', function () {
     if (recognition) {
       try { recognition.stop(); } catch (e) { /* 已停或未启动，忽略 */ }
-    }
-    if (window.WoodWhisperTTS && typeof window.WoodWhisperTTS.stop === 'function') {
-      window.WoodWhisperTTS.stop();
-    }
-  });
-
-  // 页面被切到后台（如切 Tab、最小化）时清理朗读。
-  //   原因：移动端浏览器切后台后 TTS 可能继续在后台念，体验差且耗电；
-  //   document.hidden 为 true 表示页面已不可见。
-  //   人话讲：观众都走光了，舞台就别再演了。
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden && window.WoodWhisperTTS && typeof window.WoodWhisperTTS.stop === 'function') {
-      window.WoodWhisperTTS.stop();
     }
   });
 

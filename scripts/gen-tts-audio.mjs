@@ -27,7 +27,9 @@
  * local 运行时：.venv-tts（pip install sherpa-onnx soundfile），模型在 third_party/tts-models/matcha-zh/。
  */
 import { EdgeTTS } from 'node-edge-tts';
+import WebSocket from 'ws'; // edge 合成用原生 ws（node-edge-tts 不发送 Edge 现要求的 muid Cookie，会 bytes=0）
 import { spawn } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -50,9 +52,10 @@ const MANIFEST_PATH = resolve(AUDIO_ROOT, 'manifest.json');
 // ---- Edge-tts 合成参数 ----
 const VOICE = 'zh-CN-XiaoxiaoNeural'; // 晓晓（温柔女声）
 const LANG = 'zh-CN';
-// 24kHz 单声道 32kbps：符合 spec「单声道 24~32kbps、24kHz、体积控制在几 MB 内」的编码要求
-const OUTPUT_FORMAT = 'audio-24khz-32kbitrate-mono-mp3';
-const RATE = '+0%'; // 语速 ≈ 正常（任务约定 rate≈+0%）
+// Edge 在线 TTS 不提供 24kHz-32kbitrate 组合（会解析失败并空响应）；用原生支持的
+// audio-24khz-48kbitrate-mono-mp3，后续如需压缩由 ffmpeg 统一转码（spec「24~32kbps」目标）。
+const OUTPUT_FORMAT = 'audio-24khz-48kbitrate-mono-mp3';
+const RATE = '-10%'; // 全局语速放缓至 ≈0.9（spec REQ-RATE-1）；静态/预设/在线三类语音统一 -10%
 const PITCH = 'default';
 const VOLUME = 'default';
 const TTS_TIMEOUT_MS = 30000; // 单次合成超时（库默认 10s 对长句偏紧）
@@ -70,10 +73,11 @@ const log = (msg) => console.log(msg);
 
 // ---------- 参数解析 ----------
 function parseArgs(argv) {
-  const args = { dryRun: false, only: null, provider: 'edge' };
+  const args = { dryRun: false, only: null, provider: 'edge', force: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') args.dryRun = true;
+    else if (a === '--force') args.force = true; // 覆写已存在文件（用于语速等参数变更后的整库重生成）
     else if (a === '--only') {
       const value = argv[++i];
       if (value === undefined || value.startsWith('--')) {
@@ -87,7 +91,7 @@ function parseArgs(argv) {
       }
       args.provider = value;
     } else {
-      throw new Error('未知参数：' + a + '\n用法：node scripts/gen-tts-audio.mjs [--dry-run] [--provider edge|local] [--only <category>]');
+      throw new Error('未知参数：' + a + '\n用法：node scripts/gen-tts-audio.mjs [--dry-run] [--force] [--provider edge|local] [--only <category>]');
     }
   }
   return args;
@@ -165,17 +169,120 @@ function fileReady(p) {
   }
 }
 
-function synthSentence(sentence, filePath) {
-  const tts = new EdgeTTS({
-    voice: VOICE,
-    lang: LANG,
-    outputFormat: OUTPUT_FORMAT,
-    rate: RATE,
-    pitch: PITCH,
-    volume: VOLUME,
-    timeout: TTS_TIMEOUT_MS,
+// ---- Edge-tts（ws 直连，带 muid Cookie）----
+// node-edge-tts 不发送 Edge 现要求的 muid Cookie，会造成 handshake 成功但 bytes=0。
+// 这里用 ws 库直连 speech.platform.bing.com，发送 Cookie: muid=<随机>; 取回音频帧。
+const EDGE_VERSION = '143.0.3650.75';
+const EDGE_TRUSTED_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
+const EDGE_WINDOWS_EPOCH = 11644473600n;
+const EDGE_MIN_BYTES = 200; // 低于该量视为取音频失败（空音频/校验失败）
+
+function edgeGecToken() {
+  const ticks = BigInt(Math.floor(Date.now() / 1000 + Number(EDGE_WINDOWS_EPOCH))) * 10000000n;
+  const rounded = ticks - (ticks % 3000000000n);
+  return createHash('sha256').update(`${rounded}${EDGE_TRUSTED_TOKEN}`, 'ascii').digest('hex').toUpperCase();
+}
+function edgeMuid() {
+  return randomUUID().replaceAll('-', '').toUpperCase();
+}
+function edgeEscapeXml(s) {
+  return s.replace(/[<>&"']/g, (c) => (
+    { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]
+  ));
+}
+function edgeRateParam() {
+  // RATE 为 "+0%" / "-10%" 等；Edge 接受 "+0%"/"-10%" 形式，pitch/volume 同
+  return RATE;
+}
+
+async function synthSentenceByWs(sentence, filePath) {
+  const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1` +
+    `?TrustedClientToken=${EDGE_TRUSTED_TOKEN}` +
+    `&Sec-MS-GEC=${edgeGecToken()}` +
+    `&Sec-MS-GEC-Version=1-${EDGE_VERSION}`;
+  const ws = new WebSocket(wsUrl, {
+    origin: 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+    headers: {
+      'Pragma': 'no-cache',
+      'Cache-Control': 'no-cache',
+      'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${EDGE_VERSION.split('.')[0]}.0.0.0 Safari/537.36 Edg/${EDGE_VERSION.split('.')[0]}.0.0.0`,
+      'Accept-Encoding': 'gzip, deflate, br, zstd',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cookie': `muid=${edgeMuid()};`,
+    },
+    perMessageDeflate: false,
   });
-  return tts.ttsPromise(sentence, filePath);
+
+  const audioChunks = [];
+  let finished = false;
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      if (!finished) { finished = true; try { ws.terminate(); } catch {} reject(new Error('Edge 合成超时')); }
+    }, TTS_TIMEOUT_MS);
+
+    ws.on('open', () => {
+      const config = {
+        context: { synthesis: { audio: {
+          metadataoptions: { sentenceBoundaryEnabled: false, wordBoundaryEnabled: false },
+          outputFormat: OUTPUT_FORMAT,
+        } } },
+      };
+      const configMsg =
+        `X-Timestamp:${new Date().toString()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n${JSON.stringify(config)}`;
+      ws.send(configMsg);
+
+      const ssml =
+        `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${LANG}'>` +
+        `<voice name='${VOICE}'>` +
+        `<prosody pitch='+0Hz' rate='${edgeRateParam()}' volume='+0%'>${edgeEscapeXml(sentence)}</prosody>` +
+        `</voice></speak>`;
+      const ssmlMsg =
+        `X-RequestId:${randomUUID().replaceAll('-', '')}\r\nContent-Type:application/ssml+xml\r\n` +
+        `X-Timestamp:${new Date().toISOString()}\r\nPath:ssml\r\n\r\n${ssml}`;
+      ws.send(ssmlMsg);
+    });
+
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        const SEP = 'Path:audio\r\n';
+        const idx = data.indexOf(SEP);
+        if (idx !== -1) audioChunks.push(Buffer.from(data.subarray(idx + SEP.length)));
+        else audioChunks.push(data);
+      } else {
+        const s = data.toString();
+        if (s.includes('Path:turn.end')) {
+          const total = Buffer.concat(audioChunks).length;
+          if (!finished) {
+            finished = true;
+            clearTimeout(timeout);
+            try { ws.close(); } catch {}
+            if (total < EDGE_MIN_BYTES) {
+              reject(new Error(`Edge 返回音频过短（bytes=${total}）`));
+            } else {
+              writeFileSync(filePath, Buffer.concat(audioChunks));
+              resolve(true);
+            }
+          }
+        }
+      }
+    });
+
+    ws.on('error', (err) => {
+      if (!finished) { finished = true; clearTimeout(timeout); reject(new Error('Edge WS 错误：' + (err && err.message ? err.message : err))); }
+    });
+    ws.on('close', () => {
+      clearTimeout(timeout);
+      // 未收到 turn.end 即关闭：视为取音频失败（Edge 受限/空响应），必须 reject 触发重试，
+      // 否则 Promise 悬着会让 CLI 静默以 0 退出、不写文件也不出报告。
+      if (!finished) { finished = true; reject(new Error('Edge 连接提前关闭（未返回音频）')); }
+    });
+  });
+}
+
+function synthSentence(sentence, filePath) {
+  // 使用 ws 直连（带 muid Cookie），修复 node-edge-tts 在现代 Edge 接口返回 bytes=0 的问题
+  return synthSentenceByWs(sentence, filePath);
 }
 
 async function synthSentenceWithRetry(rawSynth, sentence, filePath) {
@@ -506,6 +613,7 @@ async function runGenerate(sources, onlyCategory, cfg = {}) {
   const synthRaw = cfg.synthRaw || synthSentence;
   const concurrency = cfg.concurrency == null ? MAX_CONCURRENCY : cfg.concurrency;
   const gapMs = cfg.gapMs == null ? REQUEST_GAP_MS : cfg.gapMs;
+  const force = !!cfg.force; // true：覆写已存在文件（参数变更后的整库重生成）
   const plan = collectPlan(sources, onlyCategory);
 
   // 载入旧 manifest（增量合并：未在本轮重跑的类目条目保留，但其文件缺失/为空则剔除）
@@ -540,7 +648,7 @@ async function runGenerate(sources, onlyCategory, cfg = {}) {
     sentences.forEach((sentence, idx) => {
       const p = resolve(dir, 's' + idx + '.mp3');
       files.push(p);
-      if (fileReady(p)) {
+      if (fileReady(p) && !force) {
         stats.skipped += 1;
       } else {
         allReady = false;
@@ -652,13 +760,17 @@ async function main() {
     log('  声码器：' + provider.model.vocoder);
     log('  python=' + provider.python + '；ffmpeg=' + provider.ffmpeg);
   } else {
-    log('=== 开始生成（provider=edge · voice=' + VOICE + '，并发=' + MAX_CONCURRENCY + '，重试=' + MAX_RETRY + '）===');
+    log('=== 开始生成（provider=edge · voice=' + VOICE + '，rate=' + RATE +
+      '，并发=' + MAX_CONCURRENCY + '，重试=' + MAX_RETRY +
+      (args.force ? '，force=覆写' : '') + '）===');
   }
 
   const result = await runGenerate(
     sources,
     args.only,
-    isLocal ? { synthRaw: provider.synth, concurrency: 1, gapMs: 0 } : undefined,
+    isLocal
+      ? { synthRaw: provider.synth, concurrency: 1, gapMs: 0, force: args.force }
+      : { force: args.force },
   );
   printGenerateReport(result);
 

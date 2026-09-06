@@ -30,7 +30,7 @@ const RATE_LIMIT_MAX_REQUESTS = 12;
 const VOICE = 'zh-CN-XiaoxiaoNeural'; // 晓晓（温柔女声）
 const LANG = 'zh-CN';
 const OUTPUT_FORMAT = 'audio-24khz-32kbitrate-mono-mp3';
-const RATE = '+0%';
+const RATE = '-10%'; // 全局语速放缓至 ≈0.9（spec REQ-RATE-1），与离线/预设 MP3 一致
 const PITCH = 'default';
 const VOLUME = 'default';
 
