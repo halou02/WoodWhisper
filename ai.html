@@ -302,30 +302,26 @@
   <script src="js/live2d-stage.js"></script>
   <script>
   /* ============================================================
-   * 【A 区】AI 服务配置（Agnes AI 直连）
+   * 【A 区】AI 服务配置（点点 dots3-note-prev 直连，OpenAI 兼容协议）
    * ============================================================
-   * ▶ 在哪里填 API Key（最重要的看这里）：
-   *   往下找这一行：const AGNES_API_KEY = '这里换成你的 key';
-   *   把引号中间的占位内容换成你的 key（单引号保留！只换中间内容）
+   * ▶ 当前服务：小红书/点点 dots3-note-prev（免费测试模型，可公开）
+   *   接口基址：https://note3-prev-api.askdiandian.com
+   *   协议：标准 OpenAI Chat Completions（/v1/chat/completions），
+   *         响应取 choices[0].message.content（该模型另带 reasoning_content 思考字段，忽略即可）
    *
-   * ▶ Key 怎么申请：
-   *   打开 https://platform.agnes-ai.com 注册登录 → 创建测试 Key（sk- 开头）
-   *   → 复制 → 粘贴到下面 AGNES_API_KEY 的引号中间。
+   * ▶ 换 Key：改下面 AGNES_API_KEY 一行引号里的内容（单引号保留，只换中间）。
    *
-   * ▶ 模型：agnes-2.0-flash（免费、限流，适合测试）
-   *
-   * 【安全警告】前端直连 = Key 明文写在 HTML 里，
-   *   任何人按 F12 → Sources → ai.html 都能看到你的 Key。
-   *   人话讲：测试号免费限流随便用；正式公网发布必须换回服务端代理。
+   * 【安全提示】前端直连 = Key 明文写在 HTML 里，F12 即可见。
+   *   当前为免费测试 Key，可公开；正式商用请换成服务端代理转发。
    *
    * 【新手易错点】
    *   1. Key 填错 → 会收到"API Key 无效"提示（HTTP 401）；
    *   2. Key 只填引号中间，单引号别删，删了整文件白屏；
-   *   3. 跨域(CORS)：若 Console 红字 CORS 报错，需换回代理方案。
+   *   3. 跨域(CORS)：该接口已实测允许 GitHub Pages 与 localhost 跨域直连。
    * ============================================================ */
-  const AGNES_API_URL = 'https://apihub.agnes-ai.com/v1/chat/completions'; // Agnes 接口地址，不用改
-  const AGNES_MODEL = 'agnes-2.0-flash'; // 模型名，不用改
-  const AGNES_API_KEY = 'sk-xl7ycVTmAxRfChyoGslm6d73UVijy3cnJRErQ4jnL7c7o6lv'; // ← 你的真实测试 key 填这里！单引号保留
+  const AGNES_API_URL = 'https://note3-prev-api.askdiandian.com/v1/chat/completions'; // dots3 接口地址
+  const AGNES_MODEL = 'dots3-note-prev'; // 点点免费测试模型（带思考字段，回复稍慢属正常）
+  const AGNES_API_KEY = 'ak_SFIq9kXvq7rJvQHdLuXcHgqQV4XXN'; // 免费测试 key，可公开；单引号保留
   const AI_PRIVACY_CONSENT_KEY = 'woodwhisper-ai-privacy-consent-v1';
   let pendingAiMessage = '';
 
@@ -1243,9 +1239,9 @@
 
 
   /* ============================================================
-   * 【D 区】AI 服务调用（重点）—— 前端直连 Agnes AI
+   * 【D 区】AI 服务调用（重点）—— 前端直连 dots3（OpenAI 兼容）
    * ------------------------------------------------------------
-   * 这一段在干什么：把用户问题直接发给 Agnes AI（OpenAI 兼容格式），拿回回复。
+   * 这一段在干什么：把用户问题直接发给 dots3-note-prev（OpenAI 兼容格式），拿回回复。
    * 人话讲：fetch 就像"打电话"——你按号码（AGNES_API_URL）、
    *   亮身份证（Authorization 头带 Key）、说内容（body 里塞 messages），
    *   等对方回话（await res.json()）。
@@ -1257,9 +1253,9 @@
    *   1. fetch 是异步的，必须 await，否则 data 是 Promise 不是数据；
    *   2. 回复藏在 data.choices[0].message.content（OpenAI 格式），
    *      写错路径会拿到 undefined；
-   *   3. Agnes 的 TTFT 偏高（官方确认个别请求超 40 秒），超时保持 60 秒，
-   *      网络异常或超时要如实提示，不应用本地内容伪装成 AI 回答。
-   *   验证：Network 查看 apihub.agnes-ai.com 请求状态与响应体中的
+   *   3. dots3 是带 reasoning_content 的推理模型，首字可能要等几秒（思考阶段），
+   *      超时保持 60 秒；网络异常或超时要如实提示，不应用本地内容伪装成 AI 回答。
+   * 验证：Network 查看 note3-prev-api.askdiandian.com 请求状态与响应体中的
    *   choices[0].message.content 字段。
    * ============================================================ */
   async function callAiService(userText) {
@@ -1284,10 +1280,10 @@
       // Key 没配置：不发网络请求，直接给降级话术 + 指路。
       // 放在 try 内部，finally 里的按钮恢复逻辑自然覆盖本分支，无需手动恢复。
       if (AGNES_API_KEY === 'YOUR_AGNES_API_KEY_HERE') {
-        console.log('[AI] 未配置 Agnes API Key，使用本地降级回复');
+        console.log('[AI] 未配置 API Key，使用本地降级回复');
         const elapsed = Date.now() - startTime;
         await new Promise(r => setTimeout(r, Math.max(300, MIN_THINKING_MS - elapsed)));
-        const fallback = '你好呀！我是潮州木雕非遗数字人小匠。我还没接上"大脑"——请打开 ai.html 源码顶部的【A 区】，把 AGNES_API_KEY 一行的 YOUR_AGNES_API_KEY_HERE 换成你在 platform.agnes-ai.com 申请的 Key，保存刷新后我就能真正回答问题啦！先给你讲个招牌绝技——蟹篓镂空：匠人以整段香樟木层层镂通，雕出编织篾纹与穿篾而过的螃蟹，蟹足纤毫毕现，寓意八方来财、富甲一方。';
+        const fallback = '你好呀！我是潮州木雕非遗数字人小匠。我还没接上"大脑"——请打开 ai.html 源码顶部的【A 区】，在 AGNES_API_KEY 一行填入你的 dots3 Key，保存刷新后我就能真正回答问题啦！先给你讲个招牌绝技——蟹篓镂空：匠人以整段香樟木层层镂通，雕出编织篾纹与穿篾而过的螃蟹，蟹足纤毫毕现，寓意八方来财、富甲一方。';
         hideThinking(thinkingBubble, fallback);
         return;
       }
@@ -1350,7 +1346,7 @@
       }
 
       if (err.status === 401) {
-        hideThinking(thinkingBubble, 'API Key 无效，请打开 ai.html 顶部【A 区】检查 AGNES_API_KEY 是否填对（platform.agnes-ai.com 申请）。');
+        hideThinking(thinkingBubble, 'API Key 无效，请打开 ai.html 顶部【A 区】检查 AGNES_API_KEY 是否填对。');
         return;
       }
 

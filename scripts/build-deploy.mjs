@@ -1,4 +1,4 @@
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const projectRoot = process.cwd();
@@ -24,5 +24,7 @@ for (const entry of entries) {
     force: true,
   });
 }
+// GitHub Pages：关闭 Jekyll 处理，保证所有静态资源原样发布（EdgeOne 部署会忽略此文件）
+await writeFile(resolve(deployRoot, '.nojekyll'), '');
 
 console.log('Deployment files synchronized to .edgeone-build.');
