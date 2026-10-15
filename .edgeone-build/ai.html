@@ -172,6 +172,9 @@
         <!-- 数字人图片：圆形+鎏金边框 -->
         <img class="ai-avatar digital-human" src="assets/images/ai/数字IP正视图.png" alt="潮州木雕AI数字人小匠">
       </div>
+      <!-- Live2D 数字人画布：作为 .ai-stage 的直接子元素（与 .ai-avatar-wrap 同级），
+           由 align-items:center 水平居中；模型加载成功后由 js/live2d-stage.js 填充并隐藏静态头像（降级兜底） -->
+      <div class="live2d-stage" id="live2dStage" aria-hidden="true"></div>
     </section>
 
     <!-- 对话消息区：flex:1 自动占满剩余空间 -->
@@ -292,6 +295,11 @@
     人话讲：先搭好舞台（HTML），再请演员（JS）登场，顺序反了会找不到元素。
     ============================================================
   -->
+  <!-- 数字人舞台运行时（自托管，无外链；位于页面内联脚本之前）
+       avatar-2d.js 必须在 live2d-stage.js 之前：2D 模式（当前默认）先注册同名门面，
+       真 Live2D 管线自动退场；将来 window.WOODWHISPER_AVATAR_MODE='live2d' 时反之。 -->
+  <script src="js/avatar-2d.js"></script>
+  <script src="js/live2d-stage.js"></script>
   <script>
   /* ============================================================
    * 【A 区】AI 服务配置（Agnes AI 直连）
@@ -1375,6 +1383,7 @@
   function setAvatarSpeaking(on) {
     if (!digitalHuman) { return; }
     digitalHuman.classList.toggle('ai-avatar--speaking', !!on);
+    if (window.WoodWhisperLive2D) { window.WoodWhisperLive2D.setBusy(!!on); }
   }
 
 

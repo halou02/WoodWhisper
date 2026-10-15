@@ -770,4 +770,42 @@
       .ai-avatar-glow { animation: none !important; opacity: 0.55; }
       /* 关闭披带轻呼吸（静态保留缠枝花叶纹样外观） */
       .stage-sash { animation: none !important; }
+      /* Live2D 数字人无障碍兜底：减少动效偏好下彻底隐藏画布（JS 侧也不会初始化） */
+      .live2d-stage { display: none !important; }
     }
+
+    /* ========== Live2D 数字人舞台 ==========
+       设计意图：Live2D 模型是半身像，不做圆形裁切（保留肩颈/躯干），
+       默认隐藏；仅当 js/live2d-stage.js 加载模型成功后给 .ai-stage 加 .is-live2d 才显示，
+       同时隐藏原圆形静态头像（含金环/光晕），实现降级兜底。 */
+    .live2d-stage {
+      display: none;
+      position: relative;
+      width: min(64%, 190px);
+      /* 高度用 clamp 控制，避免 flex-shrink:0 的 .ai-stage 把下方 .chat 对话区挤没 */
+      height: clamp(140px, calc(var(--app-height, 100vh) * 0.24), 200px);
+      margin: 0 auto;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .live2d-stage__canvas { display: block; width: 100%; height: 100%; }
+    /* 单图伪 Live2D（js/avatar-2d.js）：花小刻白底正视图绝对定位进舞台，
+       mix-blend-mode:multiply 让白底融入宣纸米色（白=不变色），无需抠图；
+       pointer-events:none 让指针事件穿透到容器（跟随监听挂在容器上）。 */
+    .avatar-2d__img {
+      position: absolute;
+      mix-blend-mode: multiply;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
+      /* 覆盖全局 img{max-width:100%}：本图有意大于舞台（取中央头肩条带），
+         超出部分靠 .live2d-stage 的 overflow:hidden 裁掉 */
+      max-width: none;
+      max-height: none;
+      will-change: transform;
+    }
+    .ai-stage.is-live2d .live2d-stage { display: block; }
+    /* 激活态：隐藏原圆形静态头像（含金环/光晕）。
+       #live2dStage 已是 .ai-avatar-wrap 的兄弟节点，故可直接把 wrap 整体隐藏，
+       画布不受影响，也不需要 display:contents 之类的取巧写法。 */
+    .ai-stage.is-live2d .ai-avatar-wrap { display: none; }

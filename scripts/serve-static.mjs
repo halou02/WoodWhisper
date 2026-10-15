@@ -1,8 +1,10 @@
 import http from 'node:http';
+import os from 'node:os';
 import { createReadStream, stat } from 'node:fs';
 import { resolve, extname, sep } from 'node:path';
 
-const host = '127.0.0.1';
+// 默认仅本机访问；手机真机局域网验收时设 HOST=0.0.0.0 开放同一 Wi-Fi 访问
+const host = process.env.HOST || '127.0.0.1';
 const port = Number(process.env.PORT || 8125);
 const root = resolve(process.cwd(), '.edgeone-build');
 const mimeTypes = {
@@ -44,4 +46,13 @@ http.createServer((request, response) => {
   console.log(`Static preview: http://${host}:${port}`);
   console.log('Serving the deploy-ready .edgeone-build directory only.');
   console.log('This server does not provide /api/chat. Use the Python server to test AI replies.');
+  if (host === '0.0.0.0') {
+    const lan = Object.values(os.networkInterfaces()).flat()
+      .filter((n) => n && n.family === 'IPv4' && !n.internal)
+      .map((n) => `  http://${n.address}:${port}`);
+    if (lan.length) {
+      console.log('LAN (phone on the same Wi-Fi):');
+      console.log(lan.join('\n'));
+    }
+  }
 });
