@@ -48,6 +48,10 @@
   var ACTIVE_CLASS = 'is-live2d';
 
   var PRESENT_MS = 1800;        // "说话"状态总时长，与真 Live2D 版一致
+  // 说话动效（宁轻勿抖：慢音节半波 + 帧间平滑，幅度小）
+  var SYLLABLE_HZ = 2.4;        // 音节弹跳频率（2~3Hz 像说话点头；旧值 5.2Hz 满幅 |sin| 像震动）
+  var ACT_UP = 0.32;            // 音节"起来"的趋近系数（每 1/60s 帧）
+  var ACT_DOWN = 0.16;          // 音节"落下"的趋近系数（落下更缓，避免硬跳）
   var POINTER_LERP = 0.08;      // 跟随指数趋近系数（每 1/60s 帧）
   var POINTER_YAW = 6;          // 左右 → rotateY 最大角度（单图易穿帮，宁小）
   var POINTER_PITCH = 4;        // 上下 → rotateX 最大角度
@@ -74,7 +78,8 @@
 
   var state = 'idle';           // 'idle' | 'thinking' | 'presenting'
   var presentingStart = 0;
-  var mouthActivity = 0;        // 当前"说话活跃度"0~1（= 真模型版的口型值，驱动弹跳幅度）
+  var actSmooth = 0;            // 平滑后的说话活跃度（帧间不突变，是不抖的关键）
+  var mouthActivity = 0;        // 当前"说话活跃度"0~1（= 真模型版的口型值，驱动弹跳）
   var mouthOverride = false;
   var userMouth = 0;
   var lastHead = { x: 0, y: 0, z: 0 };
@@ -150,16 +155,26 @@
       state = 'idle';
     }
 
-    // 说话活跃度：外部接管 > 程序化音节包络 > 0
-    var act;
+    // 说话活跃度目标值：外部接管 > 程序化慢音节半波（带休止，像说话点头）> 0
+    var actTarget;
     if (mouthOverride) {
-      act = clamp01(userMouth);
+      actTarget = clamp01(userMouth);
     } else if (state === 'presenting') {
       var p = (now - presentingStart) / PRESENT_MS;
-      act = p >= 1 ? 0 : envelope(p) * Math.abs(Math.sin(t * 2 * Math.PI * 5.2));
+      // max(0,sin)：只保留正向半波，波谷贴 0 形成自然停顿，不再满幅高频 |sin|
+      var syllable = Math.max(0, Math.sin(t * 2 * Math.PI * SYLLABLE_HZ));
+      actTarget = p >= 1 ? 0 : envelope(p) * syllable;
     } else {
-      act = 0;
+      actTarget = 0;
     }
+    // 帧间非对称平滑（起得快、落得柔）：相邻帧差值很小，肉眼就不会"抖"
+    var fdt = 1 / 60;
+    var kAct = actTarget > actSmooth
+      ? 1 - Math.pow(1 - ACT_UP, fdt * 60)
+      : 1 - Math.pow(1 - ACT_DOWN, fdt * 60);
+    actSmooth += (actTarget - actSmooth) * kAct;
+    if (Math.abs(actTarget - actSmooth) < 0.001) { actSmooth = actTarget; }
+    var act = actSmooth;
     mouthActivity = act;
 
     // 状态姿态
@@ -172,11 +187,11 @@
       rz = 1.2 * Math.sin(t * 2 * Math.PI / 5.2);
       rx0 = 2; // 轻微"低头"
     } else if (state === 'presenting') {
-      // 说话：随音节上弹、轻晃、微前倾
-      var env = state === 'presenting' ? envelope(Math.min(1, (now - presentingStart) / PRESENT_MS)) : 0;
-      scale = 1 + 0.018 * act + 0.006 * breath;
-      ty = -4 * act - 1.2 * breath;
-      rz = 1.1 * env * Math.sin(t * 2 * Math.PI / 1.5) + 0.3 * breath;
+      // 说话：随平滑后的音节轻轻点头（幅度比旧版减半以上，旋转改慢摇）
+      var env = envelope(Math.min(1, (now - presentingStart) / PRESENT_MS));
+      scale = 1 + 0.010 * act + 0.005 * breath;
+      ty = -2.4 * act - 1.0 * breath;
+      rz = 0.45 * env * Math.sin(t * 2 * Math.PI / 2.6) + 0.25 * breath;
       rx0 = -1;
     } else {
       // 待机：呼吸微缩放 + 极缓左右摆
@@ -321,6 +336,7 @@
   function destroy() {
     active = false;
     state = 'idle';
+    actSmooth = 0;
     mouthActivity = 0;
     mouthOverride = false;
     if (rafId) { try { win.cancelAnimationFrame(rafId); } catch (e) { /* 忽略 */ } rafId = 0; }
